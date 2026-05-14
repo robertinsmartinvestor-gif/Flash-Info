@@ -7,9 +7,8 @@ export async function POST(req: NextRequest) {
     if (!text) return NextResponse.json({ ok: false, error: "Testo mancante" }, { status: 400 });
 
     const audioBuffer = await generateVoiceover(text, voiceId);
-    const blob = new Blob([audioBuffer], { type: "audio/mpeg" });
 
-    return new NextResponse(blob, {
+    return new NextResponse(audioBuffer, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
