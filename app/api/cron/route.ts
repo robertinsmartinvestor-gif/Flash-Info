@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     // Step 2: genera voiceover
     console.log("[CRON] Generazione voiceover...");
     const audioBuffer = await generateVoiceover(text);
-    console.log(`[CRON] Audio pronto (${audioBuffer.length} bytes)`);
+    console.log(`[CRON] Audio pronto (${audioBuffer.byteLength} bytes)`);
 
     // Step 3: qui puoi aggiungere upload YouTube, salvataggio su S3, ecc.
     // await uploadToYouTube(audioBuffer, script);
