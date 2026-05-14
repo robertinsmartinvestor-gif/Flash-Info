@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       timestamp,
       categoria,
       notizie: script.notizie.length,
-      audioBytes: audioBuffer.length,
+      audioBytes: audioBuffer.byteLength,
       note: "Step 3 (upload YouTube) da implementare",
     });
   } catch (err: any) {
