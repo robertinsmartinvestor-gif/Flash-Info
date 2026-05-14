@@ -8,7 +8,7 @@ export const VOICES = [
 export async function generateVoiceover(
   text: string,
   voiceId: string = VOICES[0].id
-): Promise<Uint8Array> {
+): Promise<ArrayBuffer> {
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
     {
@@ -30,6 +30,5 @@ export async function generateVoiceover(
     throw new Error(`ElevenLabs error ${res.status}: ${err}`);
   }
 
-  const arrayBuffer = await res.arrayBuffer();
-  return new Uint8Array(arrayBuffer);
+  return res.arrayBuffer();
 }
