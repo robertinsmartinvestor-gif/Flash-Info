@@ -3,25 +3,60 @@ name: Flash Info Cron
 on:
   schedule:
     # Ogni giorno alle 09:00 UTC (11:00 ora italiana in estate)
-    # Per più slot al giorno aggiungi righe: "0 7,11,15,19 * * *"
     - cron: "0 9 * * *"
   workflow_dispatch: # consente lancio manuale da GitHub UI
 
 jobs:
-  trigger:
+  flash-info:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Trigger cron endpoint
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Install dipendenze
+        run: npm ci
+
+      # ── Step 1: genera script ───────────────────────────────────────────────
+
+      - name: Genera script e audio
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: node scripts/generate.mjs
+
+      # ── Step 2: crea video con FFmpeg ───────────────────────────────────────
+      # Thumbnail statica (1080x1920 per Shorts) + audio → MP4
+
+      - name: Crea video con FFmpeg
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X GET "${{ secrets.APP_URL }}/api/cron" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          ffmpeg -y \
+            -loop 1 \
+            -i assets/thumbnail.jpg \
+            -i /tmp/flash.mp3 \
+            -c:v libx264 \
+            -tune stillimage \
+            -c:a aac \
+            -b:a 192k \
+            -pix_fmt yuv420p \
+            -shortest \
+            -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2" \
+            /tmp/flash.mp4
+          echo "Video creato: $(du -h /tmp/flash.mp4 | cut -f1)"
 
-          echo "HTTP status: $response"
+      # ── Step 3: upload su YouTube ───────────────────────────────────────────
 
-          if [ "$response" != "200" ]; then
-            echo "❌ Cron fallito con status $response"
-            exit 1
-          fi
-
-          echo "✅ Cron completato con successo"
+      - name: Upload su YouTube
+        env:
+          YOUTUBE_CLIENT_ID:     ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: node scripts/upload-youtube.mjs
