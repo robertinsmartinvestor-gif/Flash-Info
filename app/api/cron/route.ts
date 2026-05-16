@@ -8,9 +8,9 @@ function isAuthorized(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+//  if (!isAuthorized(req)) {
+//    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+//  }
 
   const categoria  = process.env.NEWS_CATEGORIA || "Italia";
   const numNotizie = parseInt(process.env.NEWS_NUM || "5");
