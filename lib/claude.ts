@@ -2,6 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Bootstrap: claude-haiku-4-5-20251001 (~20x meno costoso)
+// Produzione: claude-sonnet-4-6 (qualità superiore)
+const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
+
 export interface NewsItem {
   titolo: string;
   testo: string;
@@ -32,11 +36,10 @@ Rispondi SOLO con JSON valido, senza markdown, senza backtick:
     { role: "user", content: prompt },
   ];
 
-  // Flusso multi-turn per web search
   while (true) {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1500,
+      model: MODEL,
+      max_tokens: 1000,
       tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
       messages,
     });
