@@ -23,7 +23,7 @@ jobs:
         run: sudo apt-get install -y ffmpeg
 
       - name: Install dipendenze
-        run: npm ci
+        run: npm install
 
       # ── Step 1: genera script ───────────────────────────────────────────────
 
