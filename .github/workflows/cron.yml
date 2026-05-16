@@ -1,0 +1,27 @@
+name: Flash Info Cron
+
+on:
+  schedule:
+    # Ogni giorno alle 09:00 UTC (11:00 ora italiana in estate)
+    # Per più slot al giorno aggiungi righe: "0 7,11,15,19 * * *"
+    - cron: "0 9 * * *"
+  workflow_dispatch: # consente lancio manuale da GitHub UI
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cron endpoint
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "${{ secrets.APP_URL }}/api/cron" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+          echo "HTTP status: $response"
+
+          if [ "$response" != "200" ]; then
+            echo "❌ Cron fallito con status $response"
+            exit 1
+          fi
+
+          echo "✅ Cron completato con successo"
