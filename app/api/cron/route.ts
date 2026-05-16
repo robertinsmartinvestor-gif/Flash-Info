@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateScript, scriptToText } from "@/lib/claude";
-import { generateVoiceover } from "@/lib/elevenlabs";
+import { generateVoiceover } from "@/lib/tts";
 
-// Protegge il cron da chiamate non autorizzate
 function isAuthorized(req: NextRequest) {
   const auth = req.headers.get("authorization");
   return auth === `Bearer ${process.env.CRON_SECRET}`;
@@ -13,34 +12,33 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const categoria = process.env.NEWS_CATEGORIA || "Italia";
+  const categoria  = process.env.NEWS_CATEGORIA || "Italia";
   const numNotizie = parseInt(process.env.NEWS_NUM || "5");
-  const timestamp = new Date().toISOString();
+  const timestamp  = new Date().toISOString();
 
   console.log(`[CRON ${timestamp}] Avvio flash info — ${categoria}`);
 
   try {
-    // Step 1: genera script
     console.log("[CRON] Generazione script...");
     const script = await generateScript(categoria, numNotizie);
-    const text = scriptToText(script);
+    const text   = scriptToText(script);
     console.log(`[CRON] Script pronto (${text.split(" ").length} parole)`);
 
-    // Step 2: genera voiceover
     console.log("[CRON] Generazione voiceover...");
     const audioBuffer = await generateVoiceover(text);
     console.log(`[CRON] Audio pronto (${audioBuffer.byteLength} bytes)`);
 
-    // Step 3: qui puoi aggiungere upload YouTube, salvataggio su S3, ecc.
+    // Step 3: upload YouTube (da implementare)
     // await uploadToYouTube(audioBuffer, script);
 
     return NextResponse.json({
       ok: true,
       timestamp,
       categoria,
-      notizie: script.notizie.length,
+      notizie:    script.notizie.length,
       audioBytes: audioBuffer.byteLength,
-      note: "Step 3 (upload YouTube) da implementare",
+      provider:   process.env.TTS_PROVIDER || "elevenlabs",
+      model:      process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001",
     });
   } catch (err: any) {
     console.error(`[CRON] Errore:`, err.message);
