@@ -34,7 +34,7 @@ const ore = now.toLocaleString("it-IT", {
 });
 const ora = `${ore}:00`;
 
-const title = `● Flash Info ${categoria} — ${data} ore ${ora} #Shorts`;
+const title = `🔴 Flash Info ${categoria} — ${data} ore ${ora} #Shorts`;
 
 // ── Descrizione ───────────────────────────────────────────────────────────────
 // Riga 1: elenco titoli notizie
