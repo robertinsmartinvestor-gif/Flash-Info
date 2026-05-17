@@ -28,10 +28,11 @@ const data = now.toLocaleDateString("it-IT", {
   day: "numeric", month: "long", year: "numeric",
   timeZone: "Europe/Rome",
 });
-const ora = now.toLocaleTimeString("it-IT", {
-  hour: "2-digit", minute: "2-digit",
+const ore = now.toLocaleString("it-IT", {
+  hour: "2-digit",
   timeZone: "Europe/Rome",
 });
+const ora = `${ore}:00`;
 
 const title = `● Flash Info ${categoria} — ${data} ore ${ora} #Shorts`;
 
