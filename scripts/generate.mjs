@@ -5,16 +5,16 @@
 
 import { writeFileSync } from "fs";
 
-const APP_URL     = process.env.APP_URL;
-const CRON_SECRET = process.env.CRON_SECRET;
+const APP_URL    = process.env.APP_URL;
+const CATEGORIA  = process.env.NEWS_CATEGORIA || "Italia";
+const NUM        = parseInt(process.env.NEWS_NUM || "5");
 
 // Step 1: genera script
-console.log("[1/2] Genero script...");
+console.log(`[1/2] Genero script — categoria: ${CATEGORIA}...`);
 const scriptRes = await fetch(`${APP_URL}/api/script`, {
   method:  "POST",
   headers: { "Content-Type": "application/json" },
-  body:    JSON.stringify({ categoria: "Italia", numNotizie: 5 }),
-//  body:    JSON.stringify({ categoria: "sport", numNotizie: 5 }),
+  body:    JSON.stringify({ categoria: CATEGORIA, numNotizie: NUM }),
 });
 const { ok, script, error } = await scriptRes.json();
 if (!ok) throw new Error(`Script error: ${error}`);
