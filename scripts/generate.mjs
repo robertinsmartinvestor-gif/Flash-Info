@@ -13,7 +13,8 @@ console.log("[1/2] Genero script...");
 const scriptRes = await fetch(`${APP_URL}/api/script`, {
   method:  "POST",
   headers: { "Content-Type": "application/json" },
-  body:    JSON.stringify({ categoria: "Italia", numNotizie: 5 }),
+//  body:    JSON.stringify({ categoria: "Italia", numNotizie: 5 }),
+  body:    JSON.stringify({ categoria: "sport", numNotizie: 5 }),
 });
 const { ok, script, error } = await scriptRes.json();
 if (!ok) throw new Error(`Script error: ${error}`);
