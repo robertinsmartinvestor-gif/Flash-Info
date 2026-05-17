@@ -4,7 +4,11 @@ on:
   schedule:
     # Ogni giorno alle 09:00 UTC (11:00 ora italiana in estate)
     - cron: "0 9 * * *"
-  workflow_dispatch: # consente lancio manuale da GitHub UI
+  workflow_dispatch:
+
+env:
+  NEWS_CATEGORIA: Italia   # ← cambia qui per cambiare categoria globalmente
+  NEWS_NUM: "5"
 
 jobs:
   flash-info:
@@ -25,16 +29,15 @@ jobs:
       - name: Install dipendenze
         run: npm install
 
-      # ── Step 1: genera script ───────────────────────────────────────────────
+      # ── Step 1: genera script e audio ──────────────────────────────────────
 
       - name: Genera script e audio
         env:
-          APP_URL: ${{ secrets.APP_URL }}
+          APP_URL:    ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: node scripts/generate.mjs
 
       # ── Step 2: crea video con FFmpeg ───────────────────────────────────────
-      # Thumbnail statica (1080x1920 per Shorts) + audio → MP4
 
       - name: Crea video con FFmpeg
         run: |
