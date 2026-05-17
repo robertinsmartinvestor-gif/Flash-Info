@@ -6,7 +6,8 @@
 import { google } from "googleapis";
 import { createReadStream, readFileSync } from "fs";
 
-const script = JSON.parse(readFileSync("/tmp/script.json", "utf-8"));
+const script   = JSON.parse(readFileSync("/tmp/script.json", "utf-8"));
+const categoria = process.env.NEWS_CATEGORIA || "Italia";
 
 // ── Auth OAuth2 ───────────────────────────────────────────────────────────────
 
@@ -19,24 +20,32 @@ oauth2Client.setCredentials({
 });
 const youtube = google.youtube({ version: "v3", auth: oauth2Client });
 
-// ── Titolo e descrizione ──────────────────────────────────────────────────────
+// ── Titolo ────────────────────────────────────────────────────────────────────
+// Formato: ● Flash Info Italia — 17 maggio 2026 ore 11:00 #Shorts
 
-const categoria = process.env.NEWS_CATEGORIA || "Italia";
-
-const oggi = new Date().toLocaleDateString("it-IT", {
+const now = new Date();
+const data = now.toLocaleDateString("it-IT", {
   day: "numeric", month: "long", year: "numeric",
   timeZone: "Europe/Rome",
 });
+const ora = now.toLocaleTimeString("it-IT", {
+  hour: "2-digit", minute: "2-digit",
+  timeZone: "Europe/Rome",
+});
 
-const title = `OgniOra • Notizie ${categoria} — ${oggi} #Shorts`;
+const title = `● Flash Info ${categoria} — ${data} ore ${ora} #Shorts`;
 
-const description = [
-  `Le principali notizie ${categoria} di oggi in meno di 60 secondi.`,
-  "",
-  ...script.notizie.map((n, i) => `${i + 1}. ${n.titolo}`),
-  "",
-  "#FlashInfo #Notizie #OgniOra #Shorts",
-].join("\n");
+// ── Descrizione ───────────────────────────────────────────────────────────────
+// Riga 1: elenco titoli notizie
+// Riga 2: hashtag
+
+const elencoNotizie = script.notizie
+  .map((n, i) => `${i + 1}. ${n.titolo}`)
+  .join("\n");
+
+const hashtag = `#notizie #${categoria.toLowerCase()} #shorts #ogniora #flashinfo`;
+
+const description = `${elencoNotizie}\n\n${hashtag}`;
 
 // ── Upload ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +57,7 @@ const res = await youtube.videos.insert({
     snippet: {
       title,
       description,
-      tags: ["notizie", categoria.toLowerCase(), "flash info", "ogniora", "shorts", "tg"],
+      tags: ["notizie", categoria.toLowerCase(), "flash info", "ogniora", "shorts"],
       categoryId: "25",
       defaultLanguage: "it",
     },
