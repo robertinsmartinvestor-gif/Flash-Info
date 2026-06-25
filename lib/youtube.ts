@@ -3,7 +3,12 @@
  * Usa OAuth2 con refresh token (no interazione utente richiesta)
  */
 
+import { instance as gaxiosInstance } from "gaxios";
 import { google } from "googleapis";
+
+// Use Node's native fetch to avoid ERR_STREAM_PREMATURE_CLOSE on Node 24
+// (node-fetch has a gzip decompression bug that triggers during OAuth2 token refresh).
+gaxiosInstance.defaults.fetchImplementation = globalThis.fetch;
 
 function getYouTubeClient() {
   const oauth2Client = new google.auth.OAuth2(

@@ -3,6 +3,12 @@
  * Chiamato da GitHub Actions: carica /tmp/flash.mp4 su YouTube
  */
 
+// Force gaxios (used by googleapis for OAuth2 token refresh) to use Node's
+// native fetch instead of node-fetch, which has a known gzip/stream bug on
+// Node 24 that causes ERR_STREAM_PREMATURE_CLOSE during token refresh.
+import { instance as gaxiosInstance } from "gaxios";
+gaxiosInstance.defaults.fetchImplementation = globalThis.fetch;
+
 import { google } from "googleapis";
 import { createReadStream, readFileSync } from "fs";
 
