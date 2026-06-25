@@ -1,0 +1,15 @@
+name: Test Token
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test refresh token
+        run: |
+          curl -s -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=${{ secrets.YOUTUBE_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
+            -d "refresh_token=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
+            -d "grant_type=refresh_token"
