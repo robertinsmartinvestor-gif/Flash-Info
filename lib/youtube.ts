@@ -3,12 +3,7 @@
  * Usa OAuth2 con refresh token (no interazione utente richiesta)
  */
 
-import { instance as gaxiosInstance } from "gaxios";
 import { google } from "googleapis";
-
-// Use Node's native fetch to avoid ERR_STREAM_PREMATURE_CLOSE on Node 24
-// (node-fetch has a gzip decompression bug that triggers during OAuth2 token refresh).
-gaxiosInstance.defaults.fetchImplementation = globalThis.fetch;
 
 function getYouTubeClient() {
   const oauth2Client = new google.auth.OAuth2(
@@ -25,7 +20,7 @@ export interface UploadOptions {
   title: string;
   description: string;
   tags?: string[];
-  videoPath: string; // path locale al file MP4
+  videoPath: string;
 }
 
 export async function uploadToYouTube(options: UploadOptions): Promise<string> {
@@ -36,15 +31,15 @@ export async function uploadToYouTube(options: UploadOptions): Promise<string> {
     part: ["snippet", "status"],
     requestBody: {
       snippet: {
-        title:       options.title,
-        description: options.description,
-        tags:        options.tags || ["notizie", "italia", "flash info", "ogniora"],
-        categoryId:  "25", // News & Politics
+        title:           options.title,
+        description:     options.description,
+        tags:            options.tags || ["notizie", "italia", "flash info", "ogniora"],
+        categoryId:      "25",
         defaultLanguage: "it",
       },
       status: {
-        privacyStatus: "public",
-        selfDeclaredMadeForKids: false,
+        privacyStatus:            "public",
+        selfDeclaredMadeForKids:  false,
       },
     },
     media: {
@@ -58,7 +53,7 @@ export async function uploadToYouTube(options: UploadOptions): Promise<string> {
   return videoId;
 }
 
-export function buildTitle(categoria: string, notizie: { titolo: string }[]): string {
+export function buildTitle(categoria: string): string {
   const now = new Date().toLocaleString("it-IT", {
     hour: "2-digit", minute: "2-digit",
     day: "2-digit", month: "long",
