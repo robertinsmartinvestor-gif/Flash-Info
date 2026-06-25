@@ -3,12 +3,6 @@
  * Chiamato da GitHub Actions: carica /tmp/flash.mp4 su YouTube
  */
 
-// Force gaxios (used by googleapis for OAuth2 token refresh) to use Node's
-// native fetch instead of node-fetch, which has a known gzip/stream bug on
-// Node 24 that causes ERR_STREAM_PREMATURE_CLOSE during token refresh.
-import { instance as gaxiosInstance } from "gaxios";
-gaxiosInstance.defaults.fetchImplementation = globalThis.fetch;
-
 import { google } from "googleapis";
 import { createReadStream, readFileSync } from "fs";
 
@@ -27,7 +21,6 @@ oauth2Client.setCredentials({
 const youtube = google.youtube({ version: "v3", auth: oauth2Client });
 
 // ── Titolo ────────────────────────────────────────────────────────────────────
-// Formato: ● Flash Info Italia — 17 maggio 2026 ore 11:00 #Shorts
 
 const now = new Date();
 const data = now.toLocaleDateString("it-IT", {
@@ -43,15 +36,12 @@ const ora = `${ore}:00`;
 const title = `🔴 Flash Info ${categoria} — ${data} ore ${ora} #Shorts`;
 
 // ── Descrizione ───────────────────────────────────────────────────────────────
-// Riga 1: elenco titoli notizie
-// Riga 2: hashtag
 
 const elencoNotizie = script.notizie
   .map((n, i) => `${i + 1}. ${n.titolo}`)
   .join("\n");
 
 const hashtag = `#notizie #${categoria.toLowerCase()} #shorts #ogniora #flashinfo`;
-
 const description = `${elencoNotizie}\n\n${hashtag}`;
 
 // ── Upload ────────────────────────────────────────────────────────────────────
