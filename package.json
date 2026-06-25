@@ -12,14 +12,12 @@
     "react": "^18",
     "react-dom": "^18",
     "@anthropic-ai/sdk": "^0.24.0",
-    "googleapis": "^148.0.0"
+    "googleapis": "^126.0.0",
+    "gaxios": "^6.7.1"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "typescript": "^5"
-  },
-  "overrides": {
-    "gaxios": ">=6.7.0"
   }
 }
