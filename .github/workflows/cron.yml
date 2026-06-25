@@ -3,7 +3,7 @@ name: Flash Info Cron
 on:
   schedule:
     # Ogni giorno alle 09:00 UTC (11:00 ora italiana in estate)
-    - cron: "0 9 * * *"
+    #- cron: "0 9 * * *"
   workflow_dispatch:
 
 env:
