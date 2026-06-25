@@ -29,13 +29,13 @@ jobs:
           sudo apt-get install -y --fix-missing ffmpeg
 
       - name: Install dipendenze
-        run: npm install
+        run: rm -rf node_modules && npm install
 
       # ── Step 1: genera script e audio ──────────────────────────────────────
 
       - name: Genera script e audio
         env:
-          APP_URL:    ${{ secrets.APP_URL }}
+          APP_URL:     ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: node scripts/generate.mjs
 
