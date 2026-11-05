@@ -9,6 +9,13 @@ import { createReadStream, readFileSync } from "fs";
 const script   = JSON.parse(readFileSync("/tmp/script.json", "utf-8"));
 const categoria = process.env.NEWS_CATEGORIA || "Italia";
 
+// Public publication is never available from this legacy path: the new
+// distribution workflow is the only one allowed to request it.
+const privacyStatus = process.env.YOUTUBE_PRIVACY || "private";
+if (!["private", "unlisted"].includes(privacyStatus)) {
+  throw new Error(`Refusing privacy status: ${privacyStatus}`);
+}
+
 // ── Auth OAuth2 ───────────────────────────────────────────────────────────────
 
 const oauth2Client = new google.auth.OAuth2(
@@ -59,7 +66,7 @@ const res = await youtube.videos.insert({
       defaultLanguage: "it",
     },
     status: {
-      privacyStatus: "public",
+      privacyStatus,
       selfDeclaredMadeForKids: false,
     },
   },
@@ -70,5 +77,5 @@ const res = await youtube.videos.insert({
 });
 
 const videoId = res.data.id;
-console.log(`✅ Pubblicato: https://youtube.com/watch?v=${videoId}`);
+console.log(`✅ Caricato (${privacyStatus}): https://youtube.com/watch?v=${videoId}`);
 console.log(`   Shorts:     https://youtube.com/shorts/${videoId}`);

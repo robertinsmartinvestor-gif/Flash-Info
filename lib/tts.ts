@@ -35,8 +35,7 @@ async function elevenLabsVoiceover(
     }
   );
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`ElevenLabs error ${res.status}: ${err}`);
+    throw new Error(`ElevenLabs error ${res.status}`);
   }
   return res.arrayBuffer();
 }
@@ -52,6 +51,10 @@ export const AZURE_VOICES = [
   { id: "it-IT-GiuseppeNeural", label: "Giuseppe (uomo, italiano)" },
 ] as const;
 
+function isAzureVoice(voice: string): boolean {
+  return AZURE_VOICES.some((candidate) => candidate.id === voice);
+}
+
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -65,6 +68,7 @@ async function azureVoiceover(
   text: string,
   voice: string = process.env.AZURE_TTS_VOICE || "it-IT-DiegoNeural"
 ): Promise<ArrayBuffer> {
+  if (!isAzureVoice(voice)) throw new Error("Voice not allowed");
   const key    = process.env.AZURE_TTS_KEY!;
   const region = process.env.AZURE_TTS_REGION || "westeurope";
 
@@ -100,10 +104,19 @@ async function azureVoiceover(
     }
   );
   if (!audioRes.ok) {
-    const err = await audioRes.text();
-    throw new Error(`Azure TTS error ${audioRes.status}: ${err}`);
+    throw new Error(`Azure TTS error ${audioRes.status}`);
   }
   return audioRes.arrayBuffer();
+}
+
+function activeProvider(): "azure" | "elevenlabs" {
+  return process.env.TTS_PROVIDER === "elevenlabs" ? "elevenlabs" : "azure";
+}
+
+/** The voice reaches an SSML attribute or a URL path, so only known ids are accepted. */
+export function isAllowedVoice(voiceId: string): boolean {
+  const voices: readonly { id: string }[] = activeProvider() === "azure" ? AZURE_VOICES : ELEVENLABS_VOICES;
+  return voices.some((voice) => voice.id === voiceId);
 }
 
 // ─── Entrypoint unificato ─────────────────────────────────────────────────────
@@ -112,7 +125,7 @@ export async function generateVoiceover(
   text: string,
   voiceId?: string
 ): Promise<ArrayBuffer> {
-  const provider = process.env.TTS_PROVIDER || "elevenlabs";
+  const provider = activeProvider();
 
   if (provider === "azure") {
     return azureVoiceover(text, voiceId);

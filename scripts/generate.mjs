@@ -8,12 +8,16 @@ import { writeFileSync } from "fs";
 const APP_URL    = process.env.APP_URL;
 const CATEGORIA  = process.env.NEWS_CATEGORIA || "Italia";
 const NUM        = parseInt(process.env.NEWS_NUM || "5");
+const HEADERS    = {
+  "Content-Type":  "application/json",
+  "Authorization": `Bearer ${process.env.CRON_SECRET}`,
+};
 
 // Step 1: genera script
 console.log(`[1/2] Genero script — categoria: ${CATEGORIA}...`);
 const scriptRes = await fetch(`${APP_URL}/api/script`, {
   method:  "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: HEADERS,
   body:    JSON.stringify({ categoria: CATEGORIA, numNotizie: NUM }),
 });
 const { ok, script, error } = await scriptRes.json();
@@ -30,7 +34,7 @@ const text = [script.intro, ...script.notizie.map(n => n.testo), script.outro]
 
 const audioRes = await fetch(`${APP_URL}/api/voiceover`, {
   method:  "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: HEADERS,
   body:    JSON.stringify({ text }),
 });
 if (!audioRes.ok) throw new Error(`Voiceover error: ${audioRes.status}`);

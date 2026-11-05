@@ -4,16 +4,25 @@ import { useState } from "react";
 
 const CATEGORIE = ["Italia", "economia", "esteri", "tecnologia", "sport"];
 const VOICES = [
-  { id: "pNInz6obpgDQGcFmaJgB", label: "Adam (uomo)" },
-  { id: "EXAVITQu4vr4xnSDxMaL", label: "Bella (donna)" },
-  { id: "onwK4e9ZLuTAKqWW03F9", label: "Daniel (uomo, profondo)" },
+  { id: "", label: "Predefinita" },
+  { id: "it-IT-DiegoNeural", label: "Diego (uomo)" },
+  { id: "it-IT-ElsaNeural", label: "Elsa (donna)" },
+  { id: "it-IT-IsabellaNeural", label: "Isabella (donna)" },
+  { id: "it-IT-GiuseppeNeural", label: "Giuseppe (uomo)" },
 ];
+
+type Script = { intro: string; notizie: { titolo: string; testo: string }[]; outro: string };
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : "Errore imprevisto";
+}
 
 export default function Dashboard() {
   const [categoria, setCategoria] = useState("Italia");
   const [numNotizie, setNumNotizie] = useState(5);
-  const [voiceId, setVoiceId] = useState(VOICES[0].id);
-  const [script, setScript] = useState<any>(null);
+  const [voiceId, setVoiceId] = useState("");
+  const [token, setToken] = useState("");
+  const [script, setScript] = useState<Script | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loadingScript, setLoadingScript] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
@@ -27,14 +36,14 @@ export default function Dashboard() {
     try {
       const res = await fetch("/api/script", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ categoria, numNotizie }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       setScript(data.script);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setLoadingScript(false);
     }
@@ -48,7 +57,7 @@ export default function Dashboard() {
     try {
       const text = [
         script.intro,
-        ...script.notizie.map((n: any) => n.testo),
+        ...script.notizie.map((n) => n.testo),
         script.outro,
       ]
         .filter(Boolean)
@@ -56,14 +65,14 @@ export default function Dashboard() {
 
       const res = await fetch("/api/voiceover", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voiceId }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text, voiceId: voiceId || undefined }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       setAudioUrl(URL.createObjectURL(blob));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setLoadingAudio(false);
     }
@@ -73,8 +82,13 @@ export default function Dashboard() {
     <main style={{ fontFamily: "system-ui", maxWidth: 680, margin: "40px auto", padding: "0 24px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
         <span style={{ background: "#e24b4a", color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: ".07em" }}>● ON AIR</span>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Flash Info Dashboard</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>OgniOra — strumento legacy</h1>
       </div>
+
+      <section style={{ marginBottom: 28 }}>
+        <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Token di accesso</label>
+        <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 14 }} />
+      </section>
 
       {/* Step 1 */}
       <section style={{ marginBottom: 28 }}>
@@ -107,7 +121,7 @@ export default function Dashboard() {
           <div style={{ background: "#f9f9f9", padding: "10px 16px", borderBottom: "1px solid #e5e5e5", fontSize: 13, fontWeight: 600 }}>Script generato</div>
           <div style={{ padding: "16px 20px" }}>
             {script.intro && <p style={{ fontSize: 14, color: "#666", fontStyle: "italic", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #eee" }}>{script.intro}</p>}
-            {script.notizie.map((n: any, i: number) => (
+            {script.notizie.map((n, i) => (
               <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < script.notizie.length - 1 ? "1px solid #eee" : "none" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#e24b4a", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 4 }}>
                   {i + 1} · {n.titolo}

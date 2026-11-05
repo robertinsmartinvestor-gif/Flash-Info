@@ -1,15 +1,28 @@
 name: Test Token
+
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
+      # The response body contains a live access token and this repository's
+      # logs are public: only the HTTP status may ever be printed.
       - name: Test refresh token
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-          curl -s -X POST https://oauth2.googleapis.com/token \
-            -d "client_id=${{ secrets.YOUTUBE_CLIENT_ID }}" \
-            -d "client_secret=${{ secrets.YOUTUBE_CLIENT_SECRET }}" \
-            -d "refresh_token=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" \
-            -d "grant_type=refresh_token"
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST https://oauth2.googleapis.com/token \
+            --data-urlencode "client_id=$YOUTUBE_CLIENT_ID" \
+            --data-urlencode "client_secret=$YOUTUBE_CLIENT_SECRET" \
+            --data-urlencode "refresh_token=$YOUTUBE_REFRESH_TOKEN" \
+            -d "grant_type=refresh_token")
+          echo "HTTP $status"
+          test "$status" = "200"
