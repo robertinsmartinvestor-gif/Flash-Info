@@ -100,6 +100,21 @@ describe.skipIf(!url)("SupabaseStore", () => {
     expect(data).toEqual({ status: "in_review", current_version: 2 });
   });
 
+  it("claims a selected candidate once", async () => {
+    const { candidateId } = await seedEvent();
+    await admin.from("editorial_candidates").update({ status: "selected" }).eq("id", candidateId);
+    expect(await store.claimCandidate(candidateId)).toBe(true);
+    expect(await store.claimCandidate(candidateId)).toBe(false);
+  });
+
+  it("runs the operations RPCs under the real role", async () => {
+    const retention = await admin.rpc("run_retention");
+    expect(retention.error).toBeNull();
+    expect((await admin.rpc("expired_media_assets", { p_limit: 5 })).error).toBeNull();
+    expect((await admin.rpc("requeue_stale_jobs", { p_stale_minutes: 45 })).error).toBeNull();
+    expect((await admin.rpc("begin_upload", { p_queue_id: randomUUID() })).data).toBeNull();
+  });
+
   it("returns null for an unknown candidate", async () => {
     await expect(store.getCandidate(randomUUID())).resolves.toBeNull();
   });

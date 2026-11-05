@@ -55,6 +55,13 @@ export class MemoryStore implements EditorialStore {
     return this.candidates.get(candidateId) ?? null;
   }
 
+  async claimCandidate(candidateId: string) {
+    const candidate = this.candidates.get(candidateId);
+    if (candidate?.status !== "selected") return false;
+    candidate.status = "composing";
+    return true;
+  }
+
   async saveScriptVersion(input: ScriptVersionInput) {
     this.versions.push(input);
     const candidate = this.candidates.get(input.candidateId);

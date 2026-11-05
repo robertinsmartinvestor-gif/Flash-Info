@@ -219,6 +219,10 @@ export class SupabaseStore implements EditorialStore {
     };
   }
 
+  async claimCandidate(candidateId: string): Promise<boolean> {
+    return unwrap(await this.client.rpc("claim_candidate", { p_candidate_id: candidateId }), "claim_candidate") as boolean;
+  }
+
   async saveScriptVersion(input: ScriptVersionInput): Promise<{ scriptId: string; version: number }> {
     const script = unwrap(
       await this.client

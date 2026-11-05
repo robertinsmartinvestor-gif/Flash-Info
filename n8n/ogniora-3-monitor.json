@@ -1,0 +1,137 @@
+{
+  "name": "OgniOra 3 - Controllo e manutenzione",
+  "active": false,
+  "nodes": [
+    {
+      "id": "a3000000-0000-4000-8000-000000000001",
+      "name": "Ogni giorno alle 6",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a3000000-0000-4000-8000-000000000002",
+      "name": "Avvia manutenzione su GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "OgniOra GitHub"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/robertinsmartinvestor-gif/Flash-Info/actions/workflows/maintenance.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"ref\": \"main\" }",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "a3000000-0000-4000-8000-000000000003",
+      "name": "Leggi riepilogo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        400
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "OgniOra Supabase"
+        }
+      },
+      "parameters": {
+        "url": "={{ $env.OGNIORA_SUPABASE_URL }}/rest/v1/pipeline_overview?select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "a3000000-0000-4000-8000-000000000004",
+      "name": "Invia notifica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OGNIORA_NOTIFY_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: 'OgniOra: ' + $json.candidates + ' candidati, ' + $json.scripts_in_review + ' script da rivedere, ' + $json.jobs_failed + ' job falliti' }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Ogni giorno alle 6": {
+      "main": [
+        [
+          {
+            "node": "Avvia manutenzione su GitHub",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Leggi riepilogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leggi riepilogo": {
+      "main": [
+        [
+          {
+            "node": "Invia notifica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

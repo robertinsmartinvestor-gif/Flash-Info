@@ -10,6 +10,8 @@ Stato: **in ricostruzione (OgniOra 2.0)**. Nessun video viene pubblicato automat
 | [docs/audit-2026.md](docs/audit-2026.md) | Stato del sistema, criticità, piano di intervento |
 | [docs/architecture.md](docs/architecture.md) | Architettura, decisioni e limiti dei servizi |
 | [docs/editorial-engine.md](docs/editorial-engine.md) | Raccolta, eventi, script e controlli |
+| [docs/operations.md](docs/operations.md) | Workflow, n8n, pubblicazione, rotazione segreti |
+| [docs/status.md](docs/status.md) | Criteri MVP: cosa è verificato e cosa no |
 | [docs/setup.md](docs/setup.md) | Come riprodurre l'ambiente |
 | [AGENTS.md](AGENTS.md) | Regole di lavoro sul repository |
 

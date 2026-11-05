@@ -31,6 +31,7 @@ export async function runCompose(store: EditorialStore, router: AiRouter, candid
   if (!candidate) throw new Error("candidate_not_found");
   if (candidate.status !== "selected") throw new Error(`candidate_not_selected:${candidate.status}`);
   if (candidate.hasScript) throw new Error("candidate_already_scripted");
+  if (!(await store.claimCandidate(candidateId))) throw new Error("candidate_already_claimed");
 
   const format = FORMATS[candidate.format];
   const pack = buildEvidencePack(candidate.articles);
