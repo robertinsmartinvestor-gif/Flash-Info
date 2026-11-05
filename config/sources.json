@@ -1,0 +1,17 @@
+{
+  "_note": "Corriere della Sera escluso: il feed homepage è fermo a maggio 2024. Il Post risponde 403 ai bot, Banca d'Italia 404. reliability e group_key sono scelte editoriali iniziali da rivedere. group_key: testate dello stesso gruppo non contano come conferme indipendenti.",
+  "sources": [
+    { "slug": "ansa", "name": "ANSA", "publisher": "ANSA", "homepageUrl": "https://www.ansa.it", "feedUrl": "https://www.ansa.it/sito/ansait_rss.xml", "groupKey": "ansa", "reliability": 0.9 },
+    { "slug": "ansa-economia", "name": "ANSA Economia", "publisher": "ANSA", "homepageUrl": "https://www.ansa.it", "feedUrl": "https://www.ansa.it/sito/notizie/economia/economia_rss.xml", "groupKey": "ansa", "reliability": 0.9, "defaultCategory": "economia" },
+    { "slug": "agi", "name": "AGI", "publisher": "AGI", "homepageUrl": "https://www.agi.it", "feedUrl": "https://www.agi.it/rss", "groupKey": "agi", "reliability": 0.85 },
+    { "slug": "adnkronos", "name": "Adnkronos", "publisher": "Adnkronos", "homepageUrl": "https://www.adnkronos.com", "feedUrl": "https://www.adnkronos.com/RSS_Ultimora.xml", "groupKey": "adnkronos", "reliability": 0.85 },
+    { "slug": "rainews", "name": "RaiNews", "publisher": "Rai", "homepageUrl": "https://www.rainews.it", "feedUrl": "https://www.rainews.it/rss/tutti", "groupKey": "rai", "reliability": 0.85 },
+    { "slug": "sole24ore", "name": "Il Sole 24 Ore", "publisher": "Il Sole 24 Ore", "homepageUrl": "https://www.ilsole24ore.com", "feedUrl": "https://www.ilsole24ore.com/rss/italia.xml", "groupKey": "sole24ore", "reliability": 0.85 },
+    { "slug": "repubblica", "name": "la Repubblica", "publisher": "la Repubblica", "homepageUrl": "https://www.repubblica.it", "feedUrl": "https://www.repubblica.it/rss/homepage/rss2.0.xml", "groupKey": "repubblica", "reliability": 0.8 },
+    { "slug": "fatto", "name": "il Fatto Quotidiano", "publisher": "il Fatto Quotidiano", "homepageUrl": "https://www.ilfattoquotidiano.it", "feedUrl": "https://www.ilfattoquotidiano.it/feed/", "groupKey": "fatto", "reliability": 0.75 },
+    { "slug": "skytg24", "name": "Sky TG24", "publisher": "Sky TG24", "homepageUrl": "https://tg24.sky.it", "feedUrl": "https://tg24.sky.it/rss/tg24_flipboard.homepage.xml", "groupKey": "sky", "reliability": 0.8 },
+    { "slug": "tgcom24", "name": "TGCom24", "publisher": "TGCom24", "homepageUrl": "https://www.tgcom24.mediaset.it", "feedUrl": "https://www.tgcom24.mediaset.it/rss/homepage.xml", "groupKey": "mediaset", "reliability": 0.7 },
+    { "slug": "governo", "name": "Governo italiano", "publisher": "Presidenza del Consiglio", "homepageUrl": "https://www.governo.it", "feedUrl": "https://www.governo.it/feed/rss", "groupKey": "governo", "reliability": 0.85, "defaultCategory": "politica", "official": true },
+    { "slug": "istat", "name": "Istat", "publisher": "Istat", "homepageUrl": "https://www.istat.it", "feedUrl": "https://www.istat.it/feed/", "groupKey": "istat", "reliability": 0.95, "defaultCategory": "economia", "official": true }
+  ]
+}

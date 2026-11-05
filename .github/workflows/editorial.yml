@@ -1,0 +1,53 @@
+name: Editorial
+
+# Started by n8n or by hand. There is no schedule on purpose.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: ingest | compose
+        required: true
+        type: choice
+        options: [ingest, compose]
+      candidate_id:
+        description: Required for compose
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: editorial-${{ inputs.action }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+
+      - name: Ingest
+        if: inputs.action == 'ingest'
+        run: npm run job:ingest
+
+      # The input travels through env, never into the shell text. The CLI rejects
+      # anything that is not a UUID.
+      - name: Compose
+        if: inputs.action == 'compose'
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_MONTHLY_BUDGET_USD: ${{ vars.AI_MONTHLY_BUDGET_USD }}
+        run: npm run job:compose -- --candidate-id "$CANDIDATE_ID"

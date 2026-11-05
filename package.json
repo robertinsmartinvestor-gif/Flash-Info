@@ -3,7 +3,9 @@
   "version": "2.0.0-alpha.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24.0.0" },
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,12 +14,20 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "job:ingest": "tsx src/cli/ingest.ts",
+    "job:compose": "tsx src/cli/compose.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "benchmark": "tsx src/cli/benchmark.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
+    "@google/genai": "^2.32.0",
+    "@supabase/supabase-js": "^2.119.0",
+    "fast-xml-parser": "^5.12.0",
     "googleapis": "^189.0.0",
     "next": "^16.4.5",
+    "openai": "^7.52.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"
