@@ -1,23 +1,37 @@
 {
-  "name": "flash-info",
-  "version": "0.1.0",
+  "name": "ogniora",
+  "version": "2.0.0-alpha.0",
   "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
-    "next": "14.2.3",
-    "react": "^18",
-    "react-dom": "^18",
-    "@anthropic-ai/sdk": "^0.24.0",
-    "googleapis": "^126.0.0",
-    "gaxios": "^6.7.1"
+    "@anthropic-ai/sdk": "^1.6.0",
+    "googleapis": "^189.0.0",
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "typescript": "^5"
+    "@electric-sql/pglite": "^0.5.15",
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
   }
 }

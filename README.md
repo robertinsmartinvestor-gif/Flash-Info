@@ -1,59 +1,30 @@
-# Flash Info Generator
+# OgniOra
 
-Pipeline automatica: notizie italiane → script → voiceover → (YouTube)
+Piattaforma editoriale che individua notizie rilevanti, le verifica, ne ricava contenuti
+audiovisivi originali e li pubblica su YouTube dopo una revisione umana.
 
-## Stack
-- **Next.js 14** (App Router)
-- **Claude API** — generazione script con web search
-- **ElevenLabs API** — voiceover italiano
-- **Vercel** — hosting + cron job orario
+Stato: **in ricostruzione (OgniOra 2.0)**. Nessun video viene pubblicato automaticamente.
 
-## Setup
+| Documento | Contenuto |
+| --- | --- |
+| [docs/audit-2026.md](docs/audit-2026.md) | Stato del sistema, criticità, piano di intervento |
+| [docs/architecture.md](docs/architecture.md) | Architettura, decisioni e limiti dei servizi |
+| [docs/setup.md](docs/setup.md) | Come riprodurre l'ambiente |
+| [AGENTS.md](AGENTS.md) | Regole di lavoro sul repository |
 
-### 1. Clone e installa
+## Sviluppo
+
+Serve Node.js 24.
+
 ```bash
-git clone <tuo-repo>
-cd flash-info
-npm install
-```
-
-### 2. Variabili d'ambiente
-Copia `.env.example` in `.env.local` e inserisci le tue chiavi:
-```bash
+npm ci
 cp .env.example .env.local
-```
-
-### 3. Sviluppo locale
-```bash
+npm run check
 npm run dev
-# → http://localhost:3000/dashboard
 ```
 
-### 4. Deploy su Vercel
-```bash
-# Collega il repo GitHub su vercel.com
-# Aggiungi le env var nel pannello Vercel:
-# ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, CRON_SECRET, NEWS_CATEGORIA, NEWS_NUM
-```
+## Percorso legacy
 
-Il cron job parte automaticamente ogni ora grazie a `vercel.json`.
-
-## Struttura
-
-```
-app/
-  api/
-    script/route.ts      → POST /api/script       (genera script)
-    voiceover/route.ts   → POST /api/voiceover    (genera MP3)
-    cron/route.ts        → GET  /api/cron         (flusso completo, orario)
-  dashboard/page.tsx     → UI per test manuale
-lib/
-  claude.ts              → wrapper Anthropic SDK
-  elevenlabs.ts          → wrapper ElevenLabs API
-vercel.json              → configurazione cron ("0 * * * *" = ogni ora)
-```
-
-## Prossimi step
-- [ ] Step 3: generazione video con Creatomate
-- [ ] Step 4: upload automatico su YouTube
-- [ ] Notifiche su errori (email o Slack)
+`app/api/*`, `lib/` e `scripts/` sono la vecchia pipeline. Restano finché la nuova non è
+collaudata, ma tutti gli endpoint richiedono autenticazione e gli upload sono privati.
+Il workflow `cron.yml` è solo manuale.

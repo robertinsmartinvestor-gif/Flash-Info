@@ -1,47 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardCostlyRoute, internalError } from "@/lib/api-guard";
 import { generateScript, scriptToText } from "@/lib/claude";
+import { scriptRequestSchema } from "@/lib/legacy-schemas";
 import { generateVoiceover } from "@/lib/tts";
 
-function isAuthorized(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${process.env.CRON_SECRET}`;
-}
-
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = guardCostlyRoute(req, "cron");
+  if (denied) return denied;
 
-  const categoria  = process.env.NEWS_CATEGORIA || "Italia";
-  const numNotizie = parseInt(process.env.NEWS_NUM || "5");
-  const timestamp  = new Date().toISOString();
+  const config = scriptRequestSchema.safeParse({
+    categoria: process.env.NEWS_CATEGORIA || "Italia",
+    numNotizie: Number.parseInt(process.env.NEWS_NUM || "5", 10),
+  });
+  if (!config.success) return internalError("api/cron", new Error("Invalid configuration"));
 
-  console.log(`[CRON ${timestamp}] Avvio flash info — ${categoria}`);
-
+  const timestamp = new Date().toISOString();
   try {
-    console.log("[CRON] Generazione script...");
-    const script = await generateScript(categoria, numNotizie);
-    const text   = scriptToText(script);
-    console.log(`[CRON] Script pronto (${text.split(" ").length} parole)`);
-
-    console.log("[CRON] Generazione voiceover...");
-    const audioBuffer = await generateVoiceover(text);
-    console.log(`[CRON] Audio pronto (${audioBuffer.byteLength} bytes)`);
-
-    // Step 3: upload YouTube (da implementare)
-    // await uploadToYouTube(audioBuffer, script);
-
+    const script = await generateScript(config.data.categoria, config.data.numNotizie);
+    const audioBuffer = await generateVoiceover(scriptToText(script));
     return NextResponse.json({
       ok: true,
       timestamp,
-      categoria,
-      notizie:    script.notizie.length,
+      categoria: config.data.categoria,
+      notizie: script.notizie.length,
       audioBytes: audioBuffer.byteLength,
-      provider:   process.env.TTS_PROVIDER || "elevenlabs",
-      model:      process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001",
     });
-  } catch (err: any) {
-    console.error(`[CRON] Errore:`, err.message);
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+  } catch (err) {
+    return internalError("api/cron", err);
   }
 }
