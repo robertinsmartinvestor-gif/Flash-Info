@@ -1,0 +1,15 @@
+{
+  "_note": "Rotte per funzione, in ordine di fallback. Sono ipotesi iniziali: la scelta va confermata con npm run benchmark. Sovrascrivibili con AI_ROUTE_<FUNZIONE>=provider:modello,provider:modello.",
+  "routes": {
+    "script": [
+      { "provider": "anthropic", "model": "claude-sonnet-5-5" },
+      { "provider": "openai", "model": "gpt-6-luna" }
+    ],
+    "verify": [
+      { "provider": "anthropic", "model": "claude-haiku-5-5" },
+      { "provider": "gemini", "model": "gemini-2.5-flash-lite" }
+    ]
+  },
+  "timeoutMs": 90000,
+  "maxRetries": 2
+}

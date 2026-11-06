@@ -1,0 +1,12 @@
+{
+  "_note": "USD per 1M token, prezzi standard. Servono solo a stimare e a bloccare la spesa: non sono fatture. verifiedAt indica l'ultimo controllo.",
+  "verifiedAt": "2026-11-05",
+  "models": {
+    "claude-sonnet-5-5": { "input": 2.0, "output": 10.0 },
+    "claude-haiku-5-5": { "input": 0.1, "output": 0.5 },
+    "claude-opus-5-5": { "input": 4.0, "output": 20.0 },
+    "gpt-6-luna": { "input": 0.1, "output": 0.5 },
+    "gemini-2.5-flash-lite": { "input": 0.1, "output": 0.4 },
+    "text-embedding-3-small": { "input": 0.02, "output": 0 }
+  }
+}

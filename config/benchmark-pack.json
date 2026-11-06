@@ -1,0 +1,24 @@
+{
+  "_note": "Testi di esempio scritti per il benchmark, non notizie reali. Le evidenze sono volutamente scarse: un buon modello scrive meno, non inventa.",
+  "now": "2026-11-05T20:00:00.000Z",
+  "evidence": [
+    {
+      "evidenceId": "E1", "articleId": "b1", "publisher": "Agenzia Alfa", "groupKey": "alfa",
+      "title": "Il Comune di Esempio approva il nuovo piano per i trasporti",
+      "summary": "Il consiglio comunale ha approvato il piano con 24 voti favorevoli e 9 contrari. Prevede 12 nuove linee di autobus entro il 2028.",
+      "url": "https://example.org/alfa", "publishedAt": "2026-11-05T15:00:00.000Z"
+    },
+    {
+      "evidenceId": "E2", "articleId": "b2", "publisher": "Quotidiano Beta", "groupKey": "beta",
+      "title": "Trasporti, via libera al piano. Protestano i comitati di quartiere",
+      "summary": "Secondo i comitati di quartiere il piano trascura le periferie. L'assessora Rossi replica che le risorse arriveranno in due fasi.",
+      "url": "https://example.org/beta", "publishedAt": "2026-11-05T16:30:00.000Z"
+    },
+    {
+      "evidenceId": "E3", "articleId": "b3", "publisher": "Radio Gamma", "groupKey": "gamma",
+      "title": "Piano trasporti, il costo stimato è di 80 milioni",
+      "summary": "Il piano costerà 80 milioni di euro secondo la relazione del Comune. Non è ancora stato indicato da dove arriverà l'intera somma.",
+      "url": "https://example.org/gamma", "publishedAt": "2026-11-05T17:10:00.000Z"
+    }
+  ]
+}
