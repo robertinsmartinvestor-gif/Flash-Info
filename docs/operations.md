@@ -79,6 +79,15 @@ spesa non si ripete a ogni giro di n8n. Riportalo a `selected` dopo aver capito 
 
 Per Analytics il refresh token deve includere `yt-analytics.readonly`: va rigenerato.
 
+## Revisione script
+
+In `/studio/revisione` lo staff vede l'ultima versione di ogni script, con frasi, fonti citate e avvisi del
+QC. Approvare non pubblica nulla. Gli script bloccati non si possono approvare, e un'approvazione si può
+ritirare respingendo lo script. La nota è obbligatoria per respingere. Ogni decisione finisce in `audit_logs`.
+
+Ogni video con voce sintetica dichiara "voce generata con IA": i termini Google vietano di presentare
+i contenuti generati come creati da una persona, al fine di ingannare.
+
 ## Voce TTS
 
 La voce sta in `app_settings`, chiave `tts_voice`. Un admin la cambia da `/studio/voce` e ogni modifica

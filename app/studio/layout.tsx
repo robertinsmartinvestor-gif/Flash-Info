@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { button, field, small, StudioContext, supabase } from "./shared";
 
-const MENU = [{ href: "/studio/voce", label: "Voce" }];
+const MENU = [
+  { href: "/studio/revisione", label: "Revisione" },
+  { href: "/studio/voce", label: "Voce" },
+];
 
 export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -53,7 +56,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui", maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+    <main style={{ fontFamily: "system-ui", maxWidth: 680, margin: "40px auto", padding: "0 16px" }}>
       <h1 style={{ fontSize: 20, marginBottom: 24 }}>OgniOra Studio</h1>
 
       {!supabase && <p style={small}>Studio non configurato: mancano le variabili pubbliche di Supabase.</p>}
