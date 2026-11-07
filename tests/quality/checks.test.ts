@@ -137,6 +137,37 @@ describe("runQualityChecks", () => {
   });
 });
 
+describe("style checks", () => {
+  const replaceTexts = (texts: string[]) => {
+    const draft = validDraft();
+    texts.forEach((text, index) => {
+      draft.sentences[index + 3] = { ...draft.sentences[index + 3]!, text };
+    });
+    return draft;
+  };
+
+  it("sends a list of statements to the editor, as a warning", () => {
+    const draft = replaceTexts(["Ha detto che resta al centro.", "Poi ha detto che la legge conta.", "Infine ha detto che seguirà il voto."]);
+    expect(run(draft).findings).toContainEqual(expect.objectContaining({ check: "monotone_style", severity: "warning" }));
+  });
+
+  it("flags too many direct quotes", () => {
+    const draft = replaceTexts(['La frase "uno" resta.', 'La frase "due" resta.', 'La frase "tre" resta.']);
+    expect(checks(draft)).toContain("too_many_quotes");
+  });
+
+  it("flags sentences that announce instead of telling", () => {
+    const draft = validDraft();
+    draft.sentences[9] = { text: "Ecco cosa ha detto ai giornalisti.", kind: "connective", evidence: [] };
+    expect(run(draft).findings).toContainEqual(expect.objectContaining({ check: "filler_sentence", severity: "warning", sentence: 9 }));
+  });
+
+  it("never blocks on style alone", () => {
+    const draft = replaceTexts(["Ha detto che resta al centro.", "Poi ha detto che la legge conta.", "Infine ha detto che seguirà il voto."]);
+    expect(run(draft).verdict).toBe("needs_review");
+  });
+});
+
 describe("buildYoutubeMetadata", () => {
   it("credits only sources the script cites, with their real URLs", () => {
     const draft = validDraft();

@@ -12,7 +12,8 @@ export function supabaseStoreFromEnv(): SupabaseStore {
 }
 
 export function monthlyBudgetUsd(): number {
-  const value = Number(process.env.AI_MONTHLY_BUDGET_USD ?? "20");
+  // `||`, not `??`: GitHub Actions passes an unset variable as an empty string.
+  const value = Number(process.env.AI_MONTHLY_BUDGET_USD || "20");
   if (!Number.isFinite(value) || value <= 0) throw new Error("invalid AI_MONTHLY_BUDGET_USD");
   return value;
 }

@@ -149,6 +149,29 @@ function checkTone(draft: ScriptDraft): QcFinding[] {
   return findings;
 }
 
+const REPORTING_VERB = /\b(ha detto|ha dichiarato|ha aggiunto|ha affermato)\b/;
+const FILLER_OPENING = /^(ecco|vediamo|scopriamo|andiamo a)\b/;
+const MAX_REPORTING_VERBS = 2;
+const MAX_DIRECT_QUOTES = 2;
+
+/** Sound narration. These go to the editor, since they say nothing about accuracy. */
+function checkStyle(draft: ScriptDraft): QcFinding[] {
+  const findings: QcFinding[] = [];
+  const texts = draft.sentences.map((sentence) => foldText(sentence.text));
+  if (texts.filter((text) => REPORTING_VERB.test(text)).length > MAX_REPORTING_VERBS) {
+    findings.push({ check: "monotone_style", severity: "warning", message: "Troppe frasi costruite su \"ha detto\": il testo suona come un elenco." });
+  }
+  if (texts.filter((text) => text.includes('"')).length > MAX_DIRECT_QUOTES) {
+    findings.push({ check: "too_many_quotes", severity: "warning", message: "Troppe citazioni dirette." });
+  }
+  texts.forEach((text, index) => {
+    if (FILLER_OPENING.test(text)) {
+      findings.push({ check: "filler_sentence", severity: "warning", message: "Frase riempitiva: annuncia il contenuto invece di darlo.", sentence: index });
+    }
+  });
+  return findings;
+}
+
 function checkMetadata(draft: ScriptDraft): QcFinding[] {
   const findings: QcFinding[] = [];
   if (!draft.title.trim() || draft.title.length > 100) {
@@ -194,7 +217,7 @@ function checkSensitive(draft: ScriptDraft): QcFinding[] {
 
 const CHECKS_RUN = [
   "sources", "quotes_verbatim", "numbers_supported", "names_supported", "temporal_coherence",
-  "repetition", "tone", "duration", "attribution", "sensitive_topic", "metadata",
+  "repetition", "tone", "style", "duration", "attribution", "sensitive_topic", "metadata",
 ];
 
 /**
@@ -210,6 +233,7 @@ export function runQualityChecks(draft: ScriptDraft, pack: EvidenceItem[], forma
     ...draft.sentences.flatMap((sentence, index) => checkSentence(sentence, index, byId, now)),
     ...checkRepetition(draft.sentences),
     ...checkTone(draft),
+    ...checkStyle(draft),
     ...checkDuration(estimatedSeconds, format),
     ...checkSensitive(draft),
   ];
