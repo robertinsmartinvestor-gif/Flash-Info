@@ -88,12 +88,23 @@ ritirare respingendo lo script. La nota è obbligatoria per respingere. Ogni dec
 Ogni video con voce sintetica dichiara "voce generata con IA": i termini Google vietano di presentare
 i contenuti generati come creati da una persona, al fine di ingannare.
 
+## Produzione audio
+
+1. In `/studio/revisione` apri uno script approvato e premi **Genera audio**: crea un job in coda.
+2. Avvia a mano il workflow **Production** su GitHub Actions. Elabora al massimo tre job per run.
+3. Ricarica la pagina: il lettore audio compare nello script.
+
+Il job legge la voce da `tts_voice`, salva il file nel bucket privato `media`, lo registra in
+`media_assets` e il consumo in `provider_usage`, a prezzo di listino. Si ferma prima di spendere se la
+versione non è quella approvata, se la voce non è in catalogo, se mancano le credenziali o se il
+budget mensile è esaurito. Per ogni versione esiste un solo job audio: cambiare voce dopo non genera
+un nuovo file. Un job fallito non viene ritentato. Gli audio scadono secondo `retention_days.media_preview`.
+
 ## Voce TTS
 
 La voce sta in `app_settings`, chiave `tts_voice`. Un admin la cambia da `/studio/voce` e ogni modifica
 finisce in `audit_logs`. Il valore iniziale è Google Chirp 3 HD Charon, scelto con il test d'ascolto del
-7 novembre 2026. Il job di produzione audio non esiste ancora: dovrà leggere questa chiave con
-`findVoice()` e fermarsi se restituisce `null`.
+7 novembre 2026. Il job di produzione audio la legge con `findVoice()` e si ferma se restituisce `null`.
 
 Per aggiungere una voce servono una riga in `VOICE_CATALOG` e una migrazione che aggiorni
 `set_tts_voice`. Le voci Azure sono in catalogo ma non sono mai state provate con una chiave reale.

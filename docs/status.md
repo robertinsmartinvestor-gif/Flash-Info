@@ -11,7 +11,7 @@ Aggiornato al 7 novembre 2026. "Verificato" significa eseguito davvero, non solo
 | 3 | Conserva fonti e timestamp | Verificato | Su Supabase reale |
 | 4 | Produce script strutturati | Verificato | 3 script reali con Sonnet 5.5, campione ancora piccolo |
 | 5 | Blocca le affermazioni non supportate | Verificato | Ha bloccato un numero assente dalle fonti. Tasso di falsi positivi da misurare |
-| 6 | Audio italiano comprensibile | Parziale | Google Chirp 3 HD genera audio reale e Charon ha vinto il test d'ascolto. Manca il job di produzione |
+| 6 | Audio italiano comprensibile | Parziale | Google Chirp 3 HD genera audio reale e Charon ha vinto il test d'ascolto. Job di produzione scritto, mai eseguito su uno script approvato |
 | 7 | Video verticale con sottotitoli | Da fare | Render spec e sottotitoli pronti, template Remotion assente |
 | 8 | Rendering su GitHub Actions | Da fare | Dipende dal 7 |
 | 9 | Stati e risultati su Supabase | Parziale | Progetto attivo e migrazioni applicate. Mancano gli stati di produzione video |

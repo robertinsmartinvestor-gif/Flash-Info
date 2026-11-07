@@ -1,9 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { google } from "googleapis";
 import { z } from "zod";
-import { assignLabels, PRONUNCIATION_SAMPLE, runListeningTest, TEST_VOICES, testCostUsd, type TestProvider } from "@/src/media/listening-test";
-import { createAzureTts, createGoogleTts, parseGoogleCredentials, type TtsProvider } from "@/src/media/tts";
+import { assignLabels, PRONUNCIATION_SAMPLE, runListeningTest, TEST_VOICES, testCostUsd } from "@/src/media/listening-test";
 import { failJob } from "./shared";
+import { synthesizersFromEnv } from "./tts-providers";
 
 const env = z.object({
   SUPABASE_URL: z.url({ protocol: /^https$/ }),
@@ -11,23 +10,11 @@ const env = z.object({
   GITHUB_RUN_ID: z.string().regex(/^\d+$/),
 });
 
-function googleSynthesizer(json: string): TtsProvider {
-  const credentials = parseGoogleCredentials(json);
-  const auth = new google.auth.GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
-  return createGoogleTts(async () => {
-    const token = await auth.getAccessToken();
-    if (!token) throw new Error("tts_google_auth");
-    return token;
-  });
-}
-
 async function main(): Promise<void> {
   const vars = env.parse(process.env);
   const db = createClient(vars.SUPABASE_URL, vars.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  const synthesizers: Partial<Record<TestProvider, TtsProvider>> = {};
-  if (process.env.GOOGLE_TTS_CREDENTIALS_JSON) synthesizers.google = googleSynthesizer(process.env.GOOGLE_TTS_CREDENTIALS_JSON);
-  if (process.env.AZURE_TTS_KEY) synthesizers.azure = createAzureTts(process.env.AZURE_TTS_KEY, process.env.AZURE_TTS_REGION || "westeurope");
+  const synthesizers = synthesizersFromEnv();
   if (!Object.keys(synthesizers).length) throw new Error("no_tts_credentials");
 
   const latest = await db
