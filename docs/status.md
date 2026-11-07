@@ -15,7 +15,7 @@ Aggiornato al 7 novembre 2026. "Verificato" significa eseguito davvero, non solo
 | 7 | Video verticale con sottotitoli | Da fare | Render spec e sottotitoli pronti, template Remotion assente |
 | 8 | Rendering su GitHub Actions | Da fare | Dipende dal 7 |
 | 9 | Stati e risultati su Supabase | Parziale | Progetto attivo e migrazioni applicate. Mancano gli stati di produzione video |
-| 10 | Revisione tramite dashboard | Da fare | RLS e RPC pronte, interfaccia assente |
+| 10 | Revisione tramite dashboard | Parziale | Sezione Revisione dello Studio pronta, mai provata con un login reale |
 | 11 | Upload di collaudo non pubblico | Da fare | Codice pronto e mai eseguito |
 | 12 | Nessuna pubblicazione accidentale | Verificato | Policy e vincoli testati. Upload legacy forzati a privato |
 | 13 | Errori e retry senza duplicazioni | Parziale | Idempotenza testata su database e per gli script. Upload mai eseguito |
