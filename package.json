@@ -18,7 +18,9 @@
     "job:ingest": "tsx src/cli/ingest.ts",
     "job:compose": "tsx src/cli/compose.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "benchmark": "tsx src/cli/benchmark.ts"
+    "benchmark": "tsx src/cli/benchmark.ts",
+    "job:distribute": "tsx src/cli/distribute.ts",
+    "job:maintenance": "tsx src/cli/maintenance.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",

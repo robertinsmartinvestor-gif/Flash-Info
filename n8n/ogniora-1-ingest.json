@@ -1,0 +1,38 @@
+{
+  "name": "OgniOra 1 - Raccolta notizie",
+  "active": false,
+  "nodes": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Ogni 2 ore",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 2 }] } }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Avvia raccolta su GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "credentials": { "httpHeaderAuth": { "name": "OgniOra GitHub" } },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/robertinsmartinvestor-gif/Flash-Info/actions/workflows/editorial.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Accept", "value": "application/vnd.github+json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"ref\": \"main\", \"inputs\": { \"action\": \"ingest\" } }",
+        "options": { "timeout": 15000 }
+      }
+    }
+  ],
+  "connections": {
+    "Ogni 2 ore": { "main": [[{ "node": "Avvia raccolta su GitHub", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,112 @@
+{
+  "name": "OgniOra 2 - Script dei candidati scelti",
+  "active": false,
+  "nodes": [
+    {
+      "id": "a2000000-0000-4000-8000-000000000001",
+      "name": "Ogni 10 minuti",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000002",
+      "name": "Leggi candidati scelti",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "OgniOra Supabase"
+        }
+      },
+      "parameters": {
+        "url": "={{ $env.OGNIORA_SUPABASE_URL }}/rest/v1/editorial_candidates?status=eq.selected&select=id&limit=3",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "a2000000-0000-4000-8000-000000000003",
+      "name": "Avvia script su GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "OgniOra GitHub"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/robertinsmartinvestor-gif/Flash-Info/actions/workflows/editorial.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"ref\": \"main\", \"inputs\": { \"action\": \"compose\", \"candidate_id\": \"{{ $json.id }}\" } }",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Ogni 10 minuti": {
+      "main": [
+        [
+          {
+            "node": "Leggi candidati scelti",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leggi candidati scelti": {
+      "main": [
+        [
+          {
+            "node": "Avvia script su GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

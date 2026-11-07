@@ -43,5 +43,7 @@ export interface EditorialStore extends UsageLedger {
   saveEvent(event: RankedEvent): Promise<string>;
   upsertCandidate(eventId: string, event: RankedEvent, format: FormatId): Promise<void>;
   getCandidate(candidateId: string): Promise<CandidateBundle | null>;
+  /** Atomically moves a selected candidate to composing. False if another run has it. */
+  claimCandidate(candidateId: string): Promise<boolean>;
   saveScriptVersion(input: ScriptVersionInput): Promise<{ scriptId: string; version: number }>;
 }

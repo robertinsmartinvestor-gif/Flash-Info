@@ -1,0 +1,45 @@
+name: Distribution
+
+# Uploads one approved queue item. Manual or from n8n; never scheduled here.
+on:
+  workflow_dispatch:
+    inputs:
+      queue_id:
+        description: publication_queue id
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One upload at a time. Runs queue instead of cancelling: a cancelled upload
+# could leave a video on YouTube with nothing recorded here.
+concurrency:
+  group: distribution
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Upload
+        env:
+          QUEUE_ID: ${{ inputs.queue_id }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          # Fixed values, not repository variables: going public takes a reviewed
+          # change to this file on top of the approval recorded in the database.
+          PUBLICATION_MODE: manual
+          ALLOW_PUBLIC_PUBLICATION: "false"
+          OGNIORA_ENV: staging
+        run: npm run job:distribute -- --queue-id "$QUEUE_ID"

@@ -109,7 +109,17 @@ describe("runCompose", () => {
     const draft = validDraft();
     const { store, router } = setupCompose([draft, allSupported(draft)]);
     await runCompose(store, router, "c1", NOW);
+    const candidate = store.candidates.get("c1")!;
+    await expect(runCompose(store, router, "c1", NOW)).rejects.toThrow("candidate_not_selected");
+    candidate.status = "selected";
     await expect(runCompose(store, router, "c1", NOW)).rejects.toThrow("candidate_already_scripted");
+  });
+
+  it("does not retry a failed run by itself, so spend cannot repeat", async () => {
+    const { store, router } = setupCompose([], { budget: 0 });
+    await expect(runCompose(store, router, "c1", NOW)).rejects.toBeInstanceOf(BudgetExceededError);
+    expect(store.candidates.get("c1")?.status).toBe("composing");
+    await expect(runCompose(store, router, "c1", NOW)).rejects.toThrow("candidate_not_selected");
   });
 
   it("stops when the budget is exhausted", async () => {
