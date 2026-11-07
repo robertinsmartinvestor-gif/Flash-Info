@@ -66,9 +66,11 @@ Sono controlli in codice: stesso input, stesso esito.
 | Titolo sensazionalistico | Blocco |
 | Durata molto fuori range | Blocco |
 | Ripetizioni, linguaggio enfatico, durata fuori range, temi delicati | Revisione |
+| Elenco di dichiarazioni, troppe citazioni dirette, frasi riempitive | Revisione |
 
-Una bozza bloccata ha un solo nuovo tentativo con l'elenco dei problemi. Se fallisce ancora
-viene salvata come bloccata: resta visibile e non può essere approvata, nemmeno da un admin.
+Ogni bozza viene salvata come versione, con i motivi del QC. Una bozza bloccata ha un solo nuovo
+tentativo con l'elenco dei problemi. Se fallisce ancora lo script resta bloccato: è visibile e non
+può essere approvato, nemmeno da un admin.
 
 La verifica semantica, con un secondo modello, cerca ciò che il confronto testuale non vede.
 Può solo aggiungere rilievi. Se non è disponibile lo script va in revisione. `pass` significa
@@ -82,8 +84,9 @@ Può solo aggiungere rilievi. Se non è disponibile lo script va in revisione. `
   una verifica dei termini d'uso di ogni testata.
 - **Nomi comuni.** Il controllo sui nomi propri si basa sulle maiuscole: non vede i nomi
   scritti in minuscolo né le parafrasi. Per queste c'è la verifica semantica.
-- **Raggruppamenti larghi.** Storie affini sullo stesso tema possono finire insieme (nel test
-  reale: pensioni dei militari e manovra). Il revisore vede tutte le fonti del cluster.
+- **Raggruppamenti imprecisi.** Storie affini possono finire insieme (pensioni dei militari e
+  manovra) e una storia può dividersi in due eventi (nomina all'Anac). Il revisore vede tutte
+  le fonti del cluster, ma due candidati possono descrivere lo stesso fatto.
 - **Dipendenza dalle agenzie.** Testate diverse che riprendono la stessa agenzia contano come
   indipendenti: `group_key` non può accorgersene.
 - **Categorie.** Sono parole chiave: utili per il ranking, non precise (la Nazionale contro la

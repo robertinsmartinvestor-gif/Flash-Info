@@ -76,6 +76,24 @@ describe("runQualityChecks", () => {
     expect(checks(withSentence({ kind: "interpretation", text: "La scelta della Regione era giusta." }))).toContain("interpretation_unattributed");
   });
 
+  it("accepts an interpretation attributed with a reporting verb", () => {
+    const draft = withSentence({ kind: "interpretation", text: "Salvini aveva definito la legge regionale sbagliata." });
+    expect(checks(draft)).not.toContain("interpretation_unattributed");
+  });
+
+  it("does not take a purpose clause for an attribution", () => {
+    const draft = withSentence({ kind: "interpretation", text: "Un gesto giusto per tutelare la legge regionale." });
+    expect(checks(draft)).toContain("interpretation_unattributed");
+  });
+
+  it("lets a script name the publisher of a cited source", () => {
+    expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, riferisce ANSA." }))).not.toContain("name_not_in_source");
+  });
+
+  it("still blocks the publisher of a source that is not cited", () => {
+    expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, riferisce la Rai." }))).toContain("name_not_in_source");
+  });
+
   it("blocks 'oggi' on sources from another day", () => {
     const draft = withSentence({ text: "Oggi il Consiglio dei ministri ha deciso." });
     expect(checks(draft, NOW)).not.toContain("temporal_mismatch");
@@ -134,6 +152,37 @@ describe("runQualityChecks", () => {
 
   it("blocks an empty script", () => {
     expect(checks({ ...validDraft(), sentences: [] })).toContain("empty_script");
+  });
+});
+
+describe("style checks", () => {
+  const replaceTexts = (texts: string[]) => {
+    const draft = validDraft();
+    texts.forEach((text, index) => {
+      draft.sentences[index + 3] = { ...draft.sentences[index + 3]!, text };
+    });
+    return draft;
+  };
+
+  it("sends a list of statements to the editor, as a warning", () => {
+    const draft = replaceTexts(["Ha detto che resta al centro.", "Poi ha detto che la legge conta.", "Infine ha detto che seguirà il voto."]);
+    expect(run(draft).findings).toContainEqual(expect.objectContaining({ check: "monotone_style", severity: "warning" }));
+  });
+
+  it("flags too many direct quotes", () => {
+    const draft = replaceTexts(['La frase "uno" resta.', 'La frase "due" resta.', 'La frase "tre" resta.']);
+    expect(checks(draft)).toContain("too_many_quotes");
+  });
+
+  it("flags sentences that announce instead of telling", () => {
+    const draft = validDraft();
+    draft.sentences[9] = { text: "Ecco cosa ha detto ai giornalisti.", kind: "connective", evidence: [] };
+    expect(run(draft).findings).toContainEqual(expect.objectContaining({ check: "filler_sentence", severity: "warning", sentence: 9 }));
+  });
+
+  it("never blocks on style alone", () => {
+    const draft = replaceTexts(["Ha detto che resta al centro.", "Poi ha detto che la legge conta.", "Infine ha detto che seguirà il voto."]);
+    expect(run(draft).verdict).toBe("needs_review");
   });
 });
 

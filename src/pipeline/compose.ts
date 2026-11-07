@@ -22,9 +22,9 @@ function feedbackFrom(report: QcReport): string[] {
 }
 
 /**
- * Candidate to stored script version. A blocked draft gets one corrected retry;
- * if it still fails it is stored as blocked for the editor, so the failure is
- * visible and generation cannot loop on spend.
+ * Candidate to stored script versions. Every draft is saved, blocked ones too, so
+ * the reasons stay readable. A blocked draft gets one corrected retry; if that
+ * fails as well the script stays blocked for the editor, and spending stops.
  */
 export async function runCompose(store: EditorialStore, router: AiRouter, candidateId: string, now = new Date()): Promise<ComposeResult> {
   const candidate = await store.getCandidate(candidateId);
@@ -40,12 +40,8 @@ export async function runCompose(store: EditorialStore, router: AiRouter, candid
   for (let attempt = 1; ; attempt += 1) {
     const { data: draft, route } = await generateDraft(router, pack, format.id, now, feedback);
     let report = runQualityChecks(draft, pack, format, now);
-
-    if (report.verdict === "blocked" && attempt < MAX_DRAFTS) {
-      feedback = feedbackFrom(report);
-      continue;
-    }
     // Spend on the semantic check only for drafts that passed the free ones.
+    const retry = report.verdict === "blocked" && attempt < MAX_DRAFTS;
     if (report.verdict !== "blocked") report = await verifyClaims(router, draft, pack, report);
 
     const narration = draftNarration(draft);
@@ -61,6 +57,8 @@ export async function runCompose(store: EditorialStore, router: AiRouter, candid
       provider: route.provider,
       model: route.model,
     });
-    return { ...saved, verdict: report.verdict, findings: report.findings.length };
+
+    if (!retry) return { ...saved, verdict: report.verdict, findings: report.findings.length };
+    feedback = feedbackFrom(report);
   }
 }

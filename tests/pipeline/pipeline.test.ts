@@ -69,7 +69,7 @@ describe("runCompose", () => {
   it("gives a blocked draft one corrected retry, telling the model what failed", async () => {
     const draft = validDraft();
     const { store, router, calls } = setupCompose([invented(), draft, allSupported(draft)]);
-    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "pass" });
+    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "pass", version: 2 });
     expect(calls[1]).toContain("controllo qualità");
     expect(calls[1]).toContain("E7");
   });
@@ -78,7 +78,15 @@ describe("runCompose", () => {
     const { store, router, calls } = setupCompose([invented(), invented()]);
     await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "blocked" });
     expect(calls).toHaveLength(2);
-    expect(store.versions).toHaveLength(1);
+    expect(store.versions.map((version) => version.report.verdict)).toEqual(["blocked", "blocked"]);
+  });
+
+  it("keeps a blocked draft and its reasons when the retry succeeds", async () => {
+    const draft = validDraft();
+    const { store, router } = setupCompose([invented(), draft, allSupported(draft)]);
+    await runCompose(store, router, "c1", NOW);
+    expect(store.versions.map((version) => version.report.verdict)).toEqual(["blocked", "pass"]);
+    expect(store.versions[0]?.report.findings.map((finding) => finding.check)).toContain("unknown_source");
   });
 
   it("lets the semantic verifier block a draft that passed string checks", async () => {
