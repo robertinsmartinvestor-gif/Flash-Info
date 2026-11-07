@@ -83,7 +83,7 @@ un'ipotesi di partenza: la scelta va fatta col benchmark, non col prezzo di list
 | Supabase Free | 2 progetti attivi, pausa dopo 1 settimana di inattività, 500 MB DB, 1 GB storage, 50 MB per file | Retention stretta; l'ingestione periodica mantiene attivo il progetto |
 | GitHub Actions | Gratis sui runner standard per repo pubblici; log e artifact pubblici | Anteprime su Supabase, non negli artifact |
 | YouTube Data API | Dal 2 nov 2026 le API non verificate non sono più limitate al privato; senza `privacyStatus` il default è **public**; `containsSyntheticMedia` scrivibile in insert; quote `videos.insert` in un bucket separato | Il privacy status va sempre inviato. Controllare la quota in Google Cloud Console |
-| Remotion | Gratuito fino a 3 persone, anche commerciale; da 4 serve licenza | Da confermare in base alla struttura aziendale |
+| Remotion | Licenza gratuita per persone singole, enti non profit e aziende fino a 3 dipendenti, anche per uso commerciale; oltre serve licenza. Versione 5 annunciata con licenza leggermente diversa | In uso alla 4.0.541 fissata. Rivedere la licenza se cambia la struttura o prima di passare alla 5 |
 | Azure Speech F0 | 500.000 caratteri neurali/mese, 3.000 per file; thread Microsoft indicano diritti commerciali sull'output solo sui piani a pagamento | Verificare le condizioni prima di monetizzare; S0 va deciso esplicitamente |
 
 Fonti: [Cloudflare limits](https://developers.cloudflare.com/workers/platform/limits/),

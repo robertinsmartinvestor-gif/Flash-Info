@@ -1,0 +1,18 @@
+{
+  "template": "flash-v1",
+  "frame": { "width": 1080, "height": 1920, "fps": 30 },
+  "durationSeconds": 8,
+  "audioAsset": "sample/audio",
+  "title": "Video di prova del template OgniOra: questo testo non è una notizia",
+  "sources": ["Fonte di prova"],
+  "scenes": [
+    { "startSeconds": 0, "endSeconds": 4, "text": "Questo è un video di prova." },
+    { "startSeconds": 4, "endSeconds": 8, "text": "Il testo è inventato e non descrive fatti reali." }
+  ],
+  "captions": [
+    { "startSeconds": 0, "endSeconds": 2, "text": "Questo è un video" },
+    { "startSeconds": 2, "endSeconds": 4, "text": "di prova, con accenti: più città." },
+    { "startSeconds": 4, "endSeconds": 6, "text": "Il testo è inventato" },
+    { "startSeconds": 6, "endSeconds": 8, "text": "e non descrive fatti reali." }
+  ]
+}

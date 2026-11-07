@@ -6,13 +6,13 @@ const CHARON = { provider: "google", voice: "it-IT-Chirp3-HD-Charon" };
 
 function fakeStore(overrides: Partial<ProductionStore> = {}) {
   return {
-    queuedTtsJobIds: vi.fn(async () => ["job-1"]),
+    queuedJobIds: vi.fn(async () => ["job-1"]),
     claimJob: vi.fn(async (id: string) => ({ id, scriptVersionId: "version-1" })),
     loadVersion: vi.fn(async () => ({ scriptId: "script-1", narration: "ciao", approved: true })),
     loadVoiceSetting: vi.fn(async (): Promise<unknown> => CHARON),
     loadPreviewRetentionDays: vi.fn(async () => 14),
     monthlySpendUsd: vi.fn(async () => 0),
-    saveAudio: vi.fn(async () => undefined),
+    saveFile: vi.fn(async () => undefined),
     recordAsset: vi.fn(async () => "asset-1"),
     recordUsage: vi.fn(async () => undefined),
     finishJob: vi.fn(async () => undefined),
@@ -39,8 +39,9 @@ describe("runTtsJobs", () => {
     const google = synthesizer();
     await expect(run(store, { synthesizers: { google } })).resolves.toEqual([{ jobId: "job-1", status: "succeeded" }]);
     expect(google.synthesize).toHaveBeenCalledWith("ciao", "it-IT-Chirp3-HD-Charon");
-    expect(store.saveAudio).toHaveBeenCalledWith("audio/version-1/it-IT-Chirp3-HD-Charon.mp3", new Uint8Array([1, 2]));
+    expect(store.saveFile).toHaveBeenCalledWith("audio/version-1/it-IT-Chirp3-HD-Charon.mp3", new Uint8Array([1, 2]), "audio/mpeg");
     expect(store.recordAsset).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "audio",
       sizeBytes: 2,
       expiresAt: "2026-11-21T00:00:00.000Z",
       rights: { provider: "google", voice: "it-IT-Chirp3-HD-Charon", aiGenerated: true },
@@ -68,7 +69,7 @@ describe("runTtsJobs", () => {
   });
 
   it("keeps the usage when saving fails after the provider answered", async () => {
-    const store = fakeStore({ saveAudio: async () => { throw new Error("tts_storage_upload"); } });
+    const store = fakeStore({ saveFile: async () => { throw new Error("tts_storage_upload"); } });
     await expect(run(store)).resolves.toEqual([{ jobId: "job-1", status: "failed", errorCode: "tts_storage_upload" }]);
     expect(store.recordUsage).toHaveBeenCalledTimes(1);
   });
@@ -81,7 +82,7 @@ describe("runTtsJobs", () => {
 
   it("skips a job another runner took, and one failure does not stop the next", async () => {
     const store = fakeStore({
-      queuedTtsJobIds: async () => ["taken", "bad", "good"],
+      queuedJobIds: async () => ["taken", "bad", "good"],
       claimJob: async (id) => (id === "taken" ? null : { id, scriptVersionId: id }),
       loadVersion: async (id) => ({ scriptId: "s", narration: "t", approved: id === "good" }),
     });

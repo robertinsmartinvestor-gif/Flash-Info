@@ -48,6 +48,16 @@ export function buildRenderSpec(draft: ScriptDraft, sources: string[], audioAsse
   });
 }
 
+const evidenceSchema = z.array(z.object({ evidenceId: z.string(), publisher: z.string() }));
+
+/** Only sources the sentences really cite, once each. */
+export function citedPublishers(draft: ScriptDraft, evidence: unknown): string[] {
+  const parsed = evidenceSchema.safeParse(evidence);
+  if (!parsed.success) return [];
+  const cited = new Set(draft.sentences.flatMap((sentence) => sentence.evidence.map((reference) => reference.evidenceId)));
+  return [...new Set(parsed.data.filter((item) => cited.has(item.evidenceId)).map((item) => item.publisher))];
+}
+
 export interface RenderedVideo {
   path: string;
   durationSeconds: number;
@@ -58,7 +68,8 @@ export interface RenderedVideo {
 
 export interface VideoEngine {
   readonly name: string;
-  render(spec: RenderSpec, outputPath: string): Promise<RenderedVideo>;
+  probeDuration(audioFile: string): Promise<number>;
+  render(spec: RenderSpec, audioFile: string, outputPath: string): Promise<RenderedVideo>;
 }
 
 /** 50 MB is the per-file limit of Supabase Storage on the free plan. */
