@@ -21,7 +21,8 @@
     "benchmark": "tsx src/cli/benchmark.ts",
     "job:distribute": "tsx src/cli/distribute.ts",
     "job:maintenance": "tsx src/cli/maintenance.ts",
-    "job:listening-test": "tsx src/cli/listening-test.ts"
+    "job:listening-test": "tsx src/cli/listening-test.ts",
+    "job:audio": "tsx src/cli/produce-audio.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
