@@ -76,6 +76,24 @@ describe("runQualityChecks", () => {
     expect(checks(withSentence({ kind: "interpretation", text: "La scelta della Regione era giusta." }))).toContain("interpretation_unattributed");
   });
 
+  it("accepts an interpretation attributed with a reporting verb", () => {
+    const draft = withSentence({ kind: "interpretation", text: "Salvini aveva definito la legge regionale sbagliata." });
+    expect(checks(draft)).not.toContain("interpretation_unattributed");
+  });
+
+  it("does not take a purpose clause for an attribution", () => {
+    const draft = withSentence({ kind: "interpretation", text: "Un gesto giusto per tutelare la legge regionale." });
+    expect(checks(draft)).toContain("interpretation_unattributed");
+  });
+
+  it("lets a script name the publisher of a cited source", () => {
+    expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, riferisce ANSA." }))).not.toContain("name_not_in_source");
+  });
+
+  it("still blocks the publisher of a source that is not cited", () => {
+    expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, riferisce la Rai." }))).toContain("name_not_in_source");
+  });
+
   it("blocks 'oggi' on sources from another day", () => {
     const draft = withSentence({ text: "Oggi il Consiglio dei ministri ha deciso." });
     expect(checks(draft, NOW)).not.toContain("temporal_mismatch");

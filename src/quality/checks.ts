@@ -25,7 +25,8 @@ const SENSATIONAL = [
   "terrificante", "scandaloso", "non crederai", "assurdo", "assurda", "apocalisse", "follia", "strage di",
 ];
 const SENSITIVE = ["suicid", "stupr", "violenza sessuale", "minorenne", "pedofil", "femminicidio", "bambin", "abus"];
-const ATTRIBUTION = /\b(secondo|per |afferma|ha detto|dichiara|sostiene|spiega|riferisce|fa sapere|avverte|denuncia|ritiene|stando a)\b/;
+// Reporting verbs only. A bare "per" used to pass here, and it also matches "per tutelare".
+const ATTRIBUTION = /\b(secondo|stando a|afferma\w*|ha detto|hanno detto|dichiara\w*|sostien\w*|spiega\w*|riferisc\w*|fa sapere|fanno sapere|avvert\w*|denuncia\w*|ritien\w*|definit\w*|definisc\w*|parla\w* di|accus\w*|critica\w*|giudica\w*|commenta\w*)\b/;
 const RELATIVE_DAYS = /\b(oggi|stamattina|stamane|stasera|stanotte|ieri|domani)\b/;
 const WEEKDAY_OR_MONTH = new Set([
   "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica", "gennaio", "febbraio", "marzo", "aprile", "maggio",
@@ -92,7 +93,8 @@ function checkSentence(sentence: ScriptSentence, index: number, byId: Map<string
   }
   if (cited.length === 0) return findings;
 
-  const support = cited.map(evidenceText).join(" ");
+  // The publisher of a cited source can be named: "secondo la Rai" is an attribution.
+  const support = cited.map((item) => `${comparable(item.publisher)} ${evidenceText(item)}`).join(" ");
   const supportNumbers = new Set(extractNumbers(cited.map((item) => `${item.title} ${item.summary}`).join(" ")));
   for (const number of extractNumbers(sentence.text)) {
     if (!supportNumbers.has(number)) add("number_not_in_source", "blocker", `Il numero ${number} non compare nelle fonti citate.`);
