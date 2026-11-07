@@ -79,6 +79,16 @@ spesa non si ripete a ogni giro di n8n. Riportalo a `selected` dopo aver capito 
 
 Per Analytics il refresh token deve includere `yt-analytics.readonly`: va rigenerato.
 
+## Voce TTS
+
+La voce sta in `app_settings`, chiave `tts_voice`. Un admin la cambia da `/studio/voce` e ogni modifica
+finisce in `audit_logs`. Il valore iniziale è Google Chirp 3 HD Charon, scelto con il test d'ascolto del
+7 novembre 2026. Il job di produzione audio non esiste ancora: dovrà leggere questa chiave con
+`findVoice()` e fermarsi se restituisce `null`.
+
+Per aggiungere una voce servono una riga in `VOICE_CATALOG` e una migrazione che aggiorni
+`set_tts_voice`. Le voci Azure sono in catalogo ma non sono mai state provate con una chiave reale.
+
 ## Test d'ascolto TTS
 
 Confronta alla cieca quattro voci: due Google Chirp 3 HD e due Azure HD. Ogni voce legge l'ultimo

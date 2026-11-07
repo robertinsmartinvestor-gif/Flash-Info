@@ -26,7 +26,9 @@ Poi aggiungi gli utenti dello Studio: crea l'utente in Auth e inserisci in SQL E
 insert into public.admin_users (user_id, role) values ('<uuid>', 'admin');
 ```
 
-Solo chi ha `role = 'admin'` può autorizzare una pubblicazione pubblica.
+Solo chi ha `role = 'admin'` può autorizzare una pubblicazione pubblica o cambiare la voce.
+
+Lo Studio usa `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`, lette durante la build.
 
 ## Provare la raccolta senza credenziali
 

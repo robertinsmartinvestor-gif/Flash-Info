@@ -1,6 +1,7 @@
 import type { TtsProvider } from "./tts";
+import { VOICE_CATALOG, type VoiceProvider } from "./voices";
 
-export type TestProvider = "google" | "azure";
+export type TestProvider = VoiceProvider;
 
 export interface TestVoice {
   provider: TestProvider;
@@ -21,12 +22,7 @@ export interface TestResult extends TestVoice {
 }
 
 /** One male and one female voice per provider. */
-export const TEST_VOICES: readonly TestVoice[] = [
-  { provider: "google", voice: "it-IT-Chirp3-HD-Charon" },
-  { provider: "google", voice: "it-IT-Chirp3-HD-Kore" },
-  { provider: "azure", voice: "it-IT-Alessio:DragonHDLatestNeural" },
-  { provider: "azure", voice: "it-IT-Isabella:DragonHDLatestNeural" },
-];
+export const TEST_VOICES: readonly TestVoice[] = VOICE_CATALOG.map(({ provider, voice }) => ({ provider, voice }));
 
 /** List prices per million characters. Google's first million each month is free. */
 export const LIST_PRICE_PER_MILLION: Record<TestProvider, number> = { google: 30, azure: 22 };
