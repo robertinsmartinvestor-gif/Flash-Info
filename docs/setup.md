@@ -28,7 +28,7 @@ insert into public.admin_users (user_id, role) values ('<uuid>', 'admin');
 
 Solo chi ha `role = 'admin'` può autorizzare una pubblicazione pubblica o cambiare la voce.
 
-Lo Studio usa `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`, lette durante la build.
+L'unico ingresso è `/studio`: `/` e `/dashboard` reindirizzano lì. Lo Studio usa `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`, lette durante la build.
 
 ## Provare la raccolta senza credenziali
 
