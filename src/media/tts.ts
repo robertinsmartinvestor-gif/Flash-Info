@@ -11,7 +11,14 @@ export interface TtsProvider {
   synthesize(text: string, voice?: string): Promise<TtsResult>;
 }
 
-const AZURE_VOICES = new Set(["it-IT-DiegoNeural", "it-IT-ElsaNeural", "it-IT-IsabellaNeural", "it-IT-GiuseppeNeural"]);
+const AZURE_VOICES = new Set([
+  "it-IT-DiegoNeural",
+  "it-IT-ElsaNeural",
+  "it-IT-IsabellaNeural",
+  "it-IT-GiuseppeNeural",
+  "it-IT-Alessio:DragonHDLatestNeural",
+  "it-IT-Isabella:DragonHDLatestNeural",
+]);
 const AZURE_REGION = /^[a-z0-9]{3,32}$/;
 /** Per-file limit reported for the free tier: exceeding it fails, it does not truncate. */
 const AZURE_MAX_CHARACTERS = 3000;
@@ -67,6 +74,45 @@ export function createElevenLabsTts(key: string, defaultVoice: string, fetchImpl
       });
       if (!response.ok) throw new Error(`tts_elevenlabs_${response.status}`);
       return { audio: new Uint8Array(await response.arrayBuffer()), mimeType: "audio/mpeg", characters: text.length, wordTimings: null };
+    },
+  };
+}
+
+const GOOGLE_ENDPOINT = "https://eu-texttospeech.googleapis.com/v1/text:synthesize";
+const GOOGLE_VOICE = /^it-IT-Chirp3-HD-[A-Z][a-z]+$/;
+
+export interface GoogleCredentials {
+  client_email: string;
+  private_key: string;
+}
+
+/** The error stays fixed on purpose: JSON.parse errors can quote the input, and job logs are public. */
+export function parseGoogleCredentials(json: string): GoogleCredentials {
+  try {
+    const { client_email, private_key } = JSON.parse(json) as Partial<GoogleCredentials>;
+    if (typeof client_email === "string" && typeof private_key === "string") return { client_email, private_key };
+  } catch {
+    // Reported below, without the cause.
+  }
+  throw new Error("invalid_google_credentials");
+}
+
+/** Cloud TTS documents OAuth credentials, not API keys, so this takes a token source. */
+export function createGoogleTts(getToken: () => Promise<string>, defaultVoice = "it-IT-Chirp3-HD-Charon", fetchImpl: typeof fetch = fetch): TtsProvider {
+  return {
+    name: "google",
+    async synthesize(text, voice = defaultVoice) {
+      if (!GOOGLE_VOICE.test(voice)) throw new Error("tts_voice_not_allowed");
+      const response = await fetchImpl(GOOGLE_ENDPOINT, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${await getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ input: { text }, voice: { languageCode: "it-IT", name: voice }, audioConfig: { audioEncoding: "MP3" } }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`tts_google_${response.status}`);
+      const { audioContent } = (await response.json()) as { audioContent?: string };
+      if (!audioContent) throw new Error("tts_google_empty");
+      return { audio: new Uint8Array(Buffer.from(audioContent, "base64")), mimeType: "audio/mpeg", characters: text.length, wordTimings: null };
     },
   };
 }

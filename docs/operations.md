@@ -78,3 +78,22 @@ spesa non si ripete a ogni giro di n8n. Riportalo a `selected` dopo aver capito 
 4. Revoca il vecchio.
 
 Per Analytics il refresh token deve includere `yt-analytics.readonly`: va rigenerato.
+
+## Test d'ascolto TTS
+
+Confronta alla cieca quattro voci: due Google Chirp 3 HD e due Azure HD. Ogni voce legge l'ultimo
+script `needs_review` e una frase di prova su nomi, sigle e numeri.
+
+1. Su Google Cloud abilita Cloud Text-to-Speech e la fatturazione, imposta un avviso di budget e
+   crea un service account con una chiave JSON. Salvala nel segreto `GOOGLE_TTS_CREDENTIALS_JSON`.
+2. Su Azure crea una risorsa Speech S0 in West Europe. Salva la chiave in `AZURE_TTS_KEY`. La
+   variabile `AZURE_TTS_REGION` serve solo per un'altra regione.
+3. Avvia il workflow manuale **Listening Test**. Basta anche un solo provider: l'altro viene saltato.
+4. Ascolta i file in Supabase, *Storage → media → listening-test*, cartella del run. I nomi sono
+   `A-script.mp3`, `A-pronuncia.mp3` e così via.
+5. Vota prima di aprire il log del run: la chiave che collega lettere e voci è nell'ultima parte.
+
+Il costo per run è di pochi centesimi ed è registrato in `provider_usage` a prezzo di listino, anche
+quando rientra nella quota gratuita. I file non sono in `media_assets`: la retention non li
+elimina, quindi vanno cancellati a mano dopo la scelta. Gli script non sono approvati: questi audio
+restano privati e non vanno pubblicati.
