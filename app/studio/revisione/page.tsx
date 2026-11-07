@@ -19,7 +19,58 @@ interface MediaState {
   path?: string;
 }
 
-type Production = Partial<Record<"tts" | "render", MediaState>>;
+interface PublicationState {
+  id: string;
+  status: string;
+  last_error: string | null;
+  youtubeId?: string;
+}
+
+type Production = Partial<Record<"tts" | "render", MediaState>> & { publication?: PublicationState };
+
+const PUBLICATION_LABEL: Record<string, string> = {
+  pending: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
+  scheduled: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
+  uploading: "Upload in corso. Se resta così a lungo, controlla YouTube Studio prima di riprovare.",
+  uploaded: "Caricato su YouTube come privato.",
+  cancelled: "Pubblicazione annullata.",
+};
+
+const YOUTUBE_ID = /^[\w-]{11}$/;
+
+function Publication({ item, publication, onDone }: { item: ReviewItem; publication?: PublicationState; onDone: (message: string) => void }) {
+  const { client } = useStudio();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function enqueue() {
+    setBusy(true);
+    setError("");
+    const { error: failed } = await client.rpc("queue_publication", { p_version_id: item.versionId });
+    setBusy(false);
+    if (failed) setError("Video non messo in coda.");
+    else onDone("Video in coda per YouTube, come privato.");
+  }
+
+  const youtubeId = publication?.youtubeId && YOUTUBE_ID.test(publication.youtubeId) ? publication.youtubeId : null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      {!publication && <button type="button" disabled={busy} onClick={enqueue} style={button}>Metti in coda per YouTube (privato)</button>}
+      {publication && (
+        <p style={small}>
+          {publication.status === "failed" ? `Upload non riuscito: ${publication.last_error ?? "errore"}. Si può rilanciare il workflow.` : PUBLICATION_LABEL[publication.status] ?? publication.status}
+        </p>
+      )}
+      {publication && !youtubeId && <p style={small}>queue_id: <code>{publication.id}</code></p>}
+      {youtubeId && (
+        <p style={small}>
+          <a href={`https://studio.youtube.com/video/${youtubeId}/edit`} target="_blank" rel="noopener noreferrer">Apri in YouTube Studio</a>
+        </p>
+      )}
+      <p role="status" style={small}>{error}</p>
+    </div>
+  );
+}
 
 const MEDIA = {
   tts: { name: "Audio", action: "Genera audio" },
@@ -139,6 +190,7 @@ function Detail({ item, production, onDone }: { item: ReviewItem; production: Pr
       <p role="status" style={small}>{error}</p>
       {item.status === "approved" && <Media item={item} kind="tts" media={production.tts ?? {}} onDone={onDone} />}
       {item.status === "approved" && production.tts?.path && <Media item={item} kind="render" media={production.render ?? {}} onDone={onDone} />}
+      {item.status === "approved" && production.render?.path && <Publication item={item} publication={production.publication} onDone={onDone} />}
     </div>
   );
 }
@@ -151,13 +203,15 @@ export default function ReviewPage() {
   const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
-    const [scripts, versions, jobs, assets] = await Promise.all([
+    const [scripts, versions, jobs, assets, queue, uploads] = await Promise.all([
       client.from("scripts").select("id, status, format").order("created_at", { ascending: false }).limit(50),
       client.from("script_versions").select(VERSION_FIELDS).order("created_at", { ascending: false }).limit(200),
       client.from("production_jobs").select("script_version_id, kind, status, error_code").in("kind", ["tts", "render"]).limit(200),
       client.from("media_assets").select("script_version_id, kind, storage_path").in("kind", ["audio", "video"]).is("deleted_at", null).order("created_at").limit(200),
+      client.from("publication_queue").select("id, script_version_id, status, last_error").limit(200),
+      client.from("youtube_publications").select("queue_id, youtube_video_id").limit(200),
     ]);
-    if (scripts.error || versions.error || jobs.error || assets.error) {
+    if (scripts.error || versions.error || jobs.error || assets.error || queue.error || uploads.error) {
       setMessage("Script non leggibili.");
       setItems([]);
       return;
@@ -171,6 +225,10 @@ export default function ReviewPage() {
       const kind = asset.kind === "audio" ? "tts" : "render";
       const version = next[asset.script_version_id];
       next[asset.script_version_id] = { ...version, [kind]: { ...version?.[kind], path: asset.storage_path } };
+    }
+    const videoIds = new Map(uploads.data.map((upload) => [upload.queue_id as string, upload.youtube_video_id as string]));
+    for (const row of queue.data) {
+      next[row.script_version_id] = { ...next[row.script_version_id], publication: { id: row.id, status: row.status, last_error: row.last_error, youtubeId: videoIds.get(row.id) } };
     }
     setProduction(next);
     setItems(buildReviewItems(scripts.data, versions.data));

@@ -117,6 +117,18 @@ con `render_audio_missing`. Per ogni versione esiste un solo job video.
 `mode: sample` rende un testo inventato su audio muto: non legge dati né segreti e serve a provare
 il template. Il suo artifact è pubblico, quindi non deve mai contenere uno script reale.
 
+## Upload privato su YouTube
+
+1. In `/studio/revisione`, quando il video di uno script approvato è pronto, premi
+   **Metti in coda per YouTube (privato)**. La voce in coda è sempre privata, con
+   `containsSyntheticMedia` attivo; titolo, descrizione e tag vengono dai metadati salvati con la
+   versione, costruiti dalle fonti citate.
+2. Copia il `queue_id` mostrato e avvia a mano il workflow **Distribution** con quel valore.
+3. Ricarica la pagina: compare il link a YouTube Studio.
+
+Prima di un upload controlla con il workflow **Test Token** che le credenziali YouTube funzionino.
+Il canale è quello del refresh token salvato nei segreti.
+
 ## Voce TTS
 
 La voce sta in `app_settings`, chiave `tts_voice`. Un admin la cambia da `/studio/voce` e ogni modifica
