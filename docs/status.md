@@ -39,7 +39,7 @@ non si può stimare un tasso di successo.
 
 1. Rivedere i tre script e decidere se il tono è quello giusto.
 2. Verificare la licenza della voce prima di qualsiasi uso pubblico.
-3. Fase C: collaudo del video su uno script approvato, poi YouTube privato.
+3. Fase E: primo upload privato di collaudo, poi Production e Distribution avviati da n8n.
 4. Fase D: Studio in export statico e utente `admin`.
 5. Fase E: primo upload privato di collaudo, poi analytics.
 6. Benchmark tra modelli, anche per ridurre il costo a script.
