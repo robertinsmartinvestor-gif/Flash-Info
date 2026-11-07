@@ -14,53 +14,65 @@ const STATUS_LABEL: Record<string, string> = {
 
 const VERSION_FIELDS = "id, script_id, version, content, narration, estimated_seconds, evidence, qc_verdict, qc_report, created_at";
 
-interface AudioState {
+interface MediaState {
   job?: { status: string; error_code: string | null };
   path?: string;
 }
 
-const JOB_LABEL: Record<string, string> = {
-  queued: "Audio in coda: avvia il workflow Production su GitHub Actions.",
-  running: "Audio in produzione.",
-  succeeded: "Audio pronto.",
-  cancelled: "Produzione audio annullata.",
+type Production = Partial<Record<"tts" | "render", MediaState>>;
+
+const MEDIA = {
+  tts: { name: "Audio", action: "Genera audio" },
+  render: { name: "Video", action: "Genera video" },
 };
 
-function Audio({ item, audio, onDone }: { item: ReviewItem; audio: AudioState; onDone: (message: string) => void }) {
+function jobLabel(name: string, job: NonNullable<MediaState["job"]>): string {
+  if (job.status === "failed") return `${name} non riuscito: ${job.error_code ?? "errore"}.`;
+  if (job.status === "queued") return `${name} in coda: avvia il workflow Production su GitHub Actions.`;
+  if (job.status === "running") return `${name} in produzione.`;
+  if (job.status === "succeeded") return `${name} pronto.`;
+  if (job.status === "cancelled") return `Produzione ${name.toLowerCase()} annullata.`;
+  return job.status;
+}
+
+function Media({ item, kind, media, onDone }: { item: ReviewItem; kind: "tts" | "render"; media: MediaState; onDone: (message: string) => void }) {
   const { client } = useStudio();
   const [src, setSrc] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const { name, action } = MEDIA[kind];
+
   useEffect(() => {
-    if (!audio.path) return;
-    void client.storage.from("media").createSignedUrl(audio.path, 600).then(({ data }) => {
+    if (!media.path) return;
+    void client.storage.from("media").createSignedUrl(media.path, 600).then(({ data }) => {
       if (data) setSrc(data.signedUrl);
-      else setError("Audio non leggibile.");
+      else setError(`${name} non leggibile.`);
     });
-  }, [client, audio.path]);
+  }, [client, media.path, name]);
 
   async function enqueue() {
     setBusy(true);
     setError("");
-    const { error: failed } = await client.rpc("enqueue_production_job", { p_version_id: item.versionId, p_kind: "tts" });
+    const { error: failed } = await client.rpc("enqueue_production_job", { p_version_id: item.versionId, p_kind: kind });
     setBusy(false);
-    if (failed) setError("Job audio non creato.");
-    else onDone("Job audio in coda.");
+    if (failed) setError(`Job ${name.toLowerCase()} non creato.`);
+    else onDone(`Job ${name.toLowerCase()} in coda.`);
   }
 
-  const { job } = audio;
+  const { job } = media;
   return (
     <div style={{ marginTop: 16 }}>
-      {!job && <button type="button" disabled={busy} onClick={enqueue} style={button}>Genera audio</button>}
-      {job && <p style={small}>{job.status === "failed" ? `Audio non riuscito: ${job.error_code ?? "errore"}.` : JOB_LABEL[job.status] ?? job.status}</p>}
-      {src && <audio controls src={src} style={{ width: "100%" }} />}
+      {!job && <button type="button" disabled={busy} onClick={enqueue} style={button}>{action}</button>}
+      {job && <p style={small}>{jobLabel(name, job)}</p>}
+      {src && kind === "tts" && <audio controls src={src} style={{ width: "100%" }} />}
+      {src && kind === "render" && <video controls src={src} style={{ width: "100%", maxWidth: 320, display: "block" }} />}
       <p role="status" style={small}>{error}</p>
     </div>
   );
 }
 
-function Detail({ item, audio, onDone }: { item: ReviewItem; audio: AudioState; onDone: (message: string) => void }) {
+function Detail({ item, production, onDone }: { item: ReviewItem; production: Production; onDone: (message: string) => void }) {
   const { client } = useStudio();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -125,7 +137,8 @@ function Detail({ item, audio, onDone }: { item: ReviewItem; audio: AudioState; 
         </>
       )}
       <p role="status" style={small}>{error}</p>
-      {item.status === "approved" && <Audio item={item} audio={audio} onDone={onDone} />}
+      {item.status === "approved" && <Media item={item} kind="tts" media={production.tts ?? {}} onDone={onDone} />}
+      {item.status === "approved" && production.tts?.path && <Media item={item} kind="render" media={production.render ?? {}} onDone={onDone} />}
     </div>
   );
 }
@@ -133,7 +146,7 @@ function Detail({ item, audio, onDone }: { item: ReviewItem; audio: AudioState; 
 export default function ReviewPage() {
   const { client } = useStudio();
   const [items, setItems] = useState<ReviewItem[] | null>(null);
-  const [audio, setAudio] = useState<Record<string, AudioState>>({});
+  const [production, setProduction] = useState<Record<string, Production>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
@@ -141,18 +154,25 @@ export default function ReviewPage() {
     const [scripts, versions, jobs, assets] = await Promise.all([
       client.from("scripts").select("id, status, format").order("created_at", { ascending: false }).limit(50),
       client.from("script_versions").select(VERSION_FIELDS).order("created_at", { ascending: false }).limit(200),
-      client.from("production_jobs").select("script_version_id, status, error_code").eq("kind", "tts").limit(200),
-      client.from("media_assets").select("script_version_id, storage_path").eq("kind", "audio").is("deleted_at", null).order("created_at").limit(200),
+      client.from("production_jobs").select("script_version_id, kind, status, error_code").in("kind", ["tts", "render"]).limit(200),
+      client.from("media_assets").select("script_version_id, kind, storage_path").in("kind", ["audio", "video"]).is("deleted_at", null).order("created_at").limit(200),
     ]);
     if (scripts.error || versions.error || jobs.error || assets.error) {
       setMessage("Script non leggibili.");
       setItems([]);
       return;
     }
-    const next: Record<string, AudioState> = {};
-    for (const job of jobs.data) next[job.script_version_id] = { job };
-    for (const asset of assets.data) next[asset.script_version_id] = { ...next[asset.script_version_id], path: asset.storage_path };
-    setAudio(next);
+    const next: Record<string, Production> = {};
+    for (const job of jobs.data) {
+      const kind = job.kind as "tts" | "render";
+      next[job.script_version_id] = { ...next[job.script_version_id], [kind]: { job } };
+    }
+    for (const asset of assets.data) {
+      const kind = asset.kind === "audio" ? "tts" : "render";
+      const version = next[asset.script_version_id];
+      next[asset.script_version_id] = { ...version, [kind]: { ...version?.[kind], path: asset.storage_path } };
+    }
+    setProduction(next);
     setItems(buildReviewItems(scripts.data, versions.data));
   }, [client]);
 
@@ -183,7 +203,7 @@ export default function ReviewPage() {
             <Detail
               key={item.versionId + item.status}
               item={item}
-              audio={audio[item.versionId] ?? {}}
+              production={production[item.versionId] ?? {}}
               onDone={(text) => {
                 setMessage(text);
                 void load();

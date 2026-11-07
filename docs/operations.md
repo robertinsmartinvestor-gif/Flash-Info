@@ -10,7 +10,7 @@
 | `maintenance.yml` | n8n o manuale | Job bloccati, asset scaduti, retention, spesa |
 | `cron.yml` | Solo manuale | Pipeline legacy |
 
-Non c'è ancora un workflow di rendering: il template Remotion è il prossimo lavoro della Fase C.
+Il rendering gira nel workflow Production: vedi "Produzione video".
 
 Il repository è pubblico: chiunque può leggere log e scaricare artifact. I job non stampano
 contenuti né segreti, e le anteprime vanno su Supabase Storage, mai negli artifact.
@@ -99,6 +99,23 @@ Il job legge la voce da `tts_voice`, salva il file nel bucket privato `media`, l
 versione non è quella approvata, se la voce non è in catalogo, se mancano le credenziali o se il
 budget mensile è esaurito. Per ogni versione esiste un solo job audio: cambiare voce dopo non genera
 un nuovo file. Un job fallito non viene ritentato. Gli audio scadono secondo `retention_days.media_preview`.
+
+## Produzione video
+
+1. In `/studio/revisione`, quando l'audio di uno script approvato è pronto, premi **Genera video**.
+2. Avvia a mano il workflow **Production** con `mode: produce`. Elabora prima l'audio, poi i video.
+3. Ricarica la pagina: il lettore video compare nello script.
+
+Il job scarica l'audio, ne misura la durata, costruisce la render spec e rende il template
+`flash-v1` con Remotion. Salva nel bucket privato il video e i sottotitoli SRT, con la retention
+`retention_days.media_preview`. Niente immagini giornalistiche: solo testo e sfondo generato.
+
+I sottotitoli distribuiscono il tempo in base ai caratteri, perché Google non restituisce i tempi
+delle parole: **controlla la sincronia** quando guardi il video. Se l'audio è scaduto il job fallisce
+con `render_audio_missing`. Per ogni versione esiste un solo job video.
+
+`mode: sample` rende un testo inventato su audio muto: non legge dati né segreti e serve a provare
+il template. Il suo artifact è pubblico, quindi non deve mai contenere uno script reale.
 
 ## Voce TTS
 
