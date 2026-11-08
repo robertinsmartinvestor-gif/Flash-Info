@@ -91,8 +91,28 @@ describe("runCompose", () => {
 
   it("lets the semantic verifier block a draft that passed string checks", async () => {
     const draft = validDraft();
-    const { store, router } = setupCompose([draft, { results: [{ index: 1, verdict: "unsupported", reason: "distorto" }] }]);
+    const unsupported = { results: [{ index: 1, verdict: "unsupported", reason: "distorto" }] };
+    const { store, router, calls } = setupCompose([draft, unsupported, draft, unsupported]);
     await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "blocked" });
+    expect(calls[2]).toContain("distorto");
+    expect(calls).toHaveLength(4);
+  });
+
+  it("rewrites once a draft with partly supported claims, passing the verifier reasons", async () => {
+    const draft = validDraft();
+    const partial = { results: [{ index: 1, verdict: "partial", reason: "generalizza" }] };
+    const { store, router, calls } = setupCompose([draft, partial, draft, allSupported(draft)]);
+    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "pass", version: 2 });
+    expect(calls[2]).toContain("generalizza");
+    expect(store.versions.map((version) => version.report.verdict)).toEqual(["needs_review", "pass"]);
+  });
+
+  it("stops after the second draft even if claims stay partly supported", async () => {
+    const draft = validDraft();
+    const partial = { results: [{ index: 1, verdict: "partial", reason: "generalizza" }] };
+    const { router, calls, store } = setupCompose([draft, partial, draft, partial]);
+    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "needs_review", version: 2 });
+    expect(calls).toHaveLength(4);
   });
 
   it("sends the script to review when the verifier fails, never to pass", async () => {
