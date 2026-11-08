@@ -43,10 +43,43 @@ Variabili d'ambiente: `OGNIORA_SUPABASE_URL`, `OGNIORA_NOTIFY_WEBHOOK`.
 
 ## Studio
 
-`/studio` ha quattro pagine:
+### Riepilogo pubblico
+
+La home page pubblica mostra solo le schede pubblicate nella tabella digest_items.
+La tabella ha una policy RLS di sola lettura per i visitatori anonimi; articoli
+grezzi, candidati e script restano leggibili solo allo staff.
+
+In **Studio → Riepilogo** sono proposti gli eventi delle ultime 24 ore che non sono
+stati scelti dal pilota per lo Short, hanno almeno due gruppi di fonti e non hanno
+già una scheda. L'admin apre le fonti originali, scrive titolo e sintesi originali,
+controlla l'anteprima e pubblica. La RPC publish_digest_item ricontrolla ruolo,
+freschezza, candidato ancora proposto, assenza di script e due gruppi di fonti;
+sceglie da sola i link dagli articoli del cluster e registra l'azione in audit_logs.
+Uno script bloccato dal QC non entra in questo percorso. L'admin può correggere
+una scheda pubblicata con amend_digest_item (data dell'aggiornamento visibile e
+azione in audit_logs) o ritirarla con retract_digest_item; una scheda ritirata
+non viene più mostrata al pubblico.
+
+**Panoramica** mostra il conteggio delle ultime 24 ore: eventi, eventi esclusi per
+una sola fonte o basso valore, candidati non scelti, script bloccati e schede
+pubblicate. La ragione di esclusione viene registrata sui nuovi eventi a partire
+dalla migrazione; quelli raccolti prima non sono classificati retroattivamente.
+Gli elementi RSS senza data valida o oltre 72 ore vengono scartati prima del DB
+e quindi non entrano in questi conteggi.
+
+Il sito usa la stessa app Next e le variabili pubbliche NEXT_PUBLIC_SUPABASE_URL e
+NEXT_PUBLIC_SUPABASE_ANON_KEY. La lettura client-side è adatta al primo esperimento
+con traffico diretto; prima di puntare sulla ricerca organica occorre rendere le
+schede disponibili nell'HTML iniziale e aggiungere URL permanenti per le notizie.
+La migrazione non inserisce schede e non avvia pubblicazioni da sola.
+
+### Pagine dello Studio
+
+`/studio` ha cinque pagine:
 
 - **Panoramica:** interruttore del pilota, spesa del mese sul tetto, numeri della pipeline, ultimi video e attività.
 - **Revisione:** script da rivedere, approvati e bloccati, con i passi audio → video → YouTube.
+- **Riepilogo:** eventi idonei non scelti per il video, con verifica e pubblicazione manuale sul sito.
 - **Pubblicazioni:** ogni voce della coda YouTube, con stato e visibilità.
 - **Impostazioni:** regole del pilota, spesa, produzione, conservazione e voce. Solo gli admin modificano.
 

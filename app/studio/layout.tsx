@@ -11,12 +11,14 @@ const ICONS: Record<string, ReactNode> = {
   overview: <path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z" />,
   review: <path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />,
   publish: <path d="M22 8.5a2.5 2.5 0 0 0-1.8-2.4C18.6 5.6 12 5.6 12 5.6s-6.6 0-8.2.5A2.5 2.5 0 0 0 2 8.5 26 26 0 0 0 1.6 12c0 1.2.1 2.4.4 3.5a2.5 2.5 0 0 0 1.8 2.4c1.6.5 8.2.5 8.2.5s6.6 0 8.2-.5a2.5 2.5 0 0 0 1.8-2.4c.3-1.1.4-2.3.4-3.5s-.1-2.4-.4-3.5zM10 15V9l5 3z" />,
+  digest: <path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5" />,
   settings: <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />,
 };
 
 const MENU = [
   { href: "/studio", label: "Panoramica", icon: "overview" },
   { href: "/studio/revisione", label: "Revisione", icon: "review", counter: "review" as const },
+  { href: "/studio/riepilogo", label: "Riepilogo", icon: "digest" },
   { href: "/studio/pubblicazioni", label: "Pubblicazioni", icon: "publish" },
   { href: "/studio/impostazioni", label: "Impostazioni", icon: "settings" },
 ];

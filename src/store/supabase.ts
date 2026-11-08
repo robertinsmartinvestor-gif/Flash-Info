@@ -173,6 +173,7 @@ export class SupabaseStore implements EditorialStore {
       last_seen_at: event.lastSeenAt,
       event_at: event.eventAt,
       independent_sources: event.independentSources,
+      ineligible_reason: event.ineligibleReason,
       score: event.score.total,
       update_of_event_id: event.cluster.updateOfEventId,
     };

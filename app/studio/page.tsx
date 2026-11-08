@@ -16,6 +16,15 @@ interface Overview {
   publications_done: number;
 }
 
+interface Funnel {
+  events_seen: number;
+  single_source: number;
+  low_value: number;
+  eligible_unselected: number;
+  scripts_blocked: number;
+  digest_published: number;
+}
+
 interface Autopilot {
   enabled?: boolean;
   max_stories_per_day?: number;
@@ -69,6 +78,7 @@ function activityDetail(item: Activity): string {
 export default function OverviewPage() {
   const { client, role } = useStudio();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [funnel, setFunnel] = useState<Funnel | null>(null);
   const [autopilot, setAutopilot] = useState<Autopilot>({});
   const [budget, setBudget] = useState<number | null>(null);
   const [spend, setSpend] = useState<number | null>(null);
@@ -80,16 +90,18 @@ export default function OverviewPage() {
 
   const load = useCallback(async () => {
     const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-    const [stats, settings, spent, picked, log, uploads] = await Promise.all([
+    const [stats, settings, spent, picked, log, uploads, funnelStats] = await Promise.all([
       client.from("pipeline_overview").select("*").maybeSingle(),
       client.from("app_settings").select("key, value").in("key", ["autopilot", "budget"]),
       client.rpc("provider_spend_usd"),
       client.from("audit_logs").select("id", { count: "exact", head: true }).eq("action", "candidate.auto_selected").gt("created_at", since),
       client.from("audit_logs").select("id, action, actor_type, data, created_at").order("created_at", { ascending: false }).limit(14),
       client.from("youtube_publications").select("queue_id, youtube_video_id, privacy, created_at").order("created_at", { ascending: false }).limit(6),
+      client.from("editorial_funnel_24h").select("*").maybeSingle(),
     ]);
     if (stats.error || settings.error || log.error || uploads.error) setMessage("Alcuni dati non sono leggibili.");
     setOverview((stats.data as Overview | null) ?? null);
+    setFunnel((funnelStats.data as Funnel | null) ?? null);
     const values = new Map((settings.data ?? []).map((row) => [row.key as string, row.value as Record<string, unknown>]));
     setAutopilot((values.get("autopilot") ?? {}) as Autopilot);
     const cap = values.get("budget")?.monthly_usd;
@@ -169,6 +181,21 @@ export default function OverviewPage() {
         <Stat label="In produzione" value={overview?.jobs_active ?? "–"} hint={overview?.jobs_failed ? `${overview.jobs_failed} non riusciti` : "nessun errore"} />
         <Stat label="Video caricati" value={overview?.publications_done ?? "–"} hint={overview?.publications_pending ? `${overview.publications_pending} in coda` : "nessuno in coda"} />
       </div>
+
+      <section className="card" style={{ marginBottom: 16 }}>
+        <div className="card-head">
+          <div><h2>Notizie oltre YouTube · ultime 24 ore</h2><p className="sub">Eventi raccolti, candidati non scelti e contenuti fermati dai controlli.</p></div>
+          <Link href="/studio/riepilogo">Prepara il riepilogo</Link>
+        </div>
+        <div className="grid stats">
+          <Stat label="Eventi raccolti" value={funnel?.events_seen ?? "–"} />
+          <Stat label="Una sola fonte" value={funnel?.single_source ?? "–"} hint="non pubblicabili nel riepilogo" />
+          <Stat label="Basso valore" value={funnel?.low_value ?? "–"} />
+          <Stat label="Idonei non scelti" value={funnel?.eligible_unselected ?? "–"} hint="da valutare per il sito" />
+          <Stat label="Script bloccati" value={funnel?.scripts_blocked ?? "–"} hint="richiedono correzione" />
+          <Stat label="Sul sito" value={funnel?.digest_published ?? "–"} />
+        </div>
+      </section>
 
       <div className="grid two">
         <section className="card">
