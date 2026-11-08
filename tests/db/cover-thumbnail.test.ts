@@ -77,7 +77,7 @@ describe("two-stage upload", () => {
     const item = (await service(() => one("select begin_upload($1) as item", [id]))).item as Row;
     expect(item.thumbnail_path).toMatch(/^thumbnail\/.+\/cover-v1\.png$/);
 
-    await service(() => db.query("select record_youtube_video($1, 'yt-a')", [id]));
+    await service(() => db.query("select record_youtube_video($1, 'yt-a', 'private')", [id]));
     expect(await status(id)).toMatchObject({ status: "processing" });
     expect(await one("select privacy from youtube_publications where queue_id = $1", [id])).toEqual({ privacy: "private" });
 
@@ -85,29 +85,30 @@ describe("two-stage upload", () => {
     expect((await service(() => one("select begin_upload($1) as item", [id]))).item).toBeNull();
   });
 
-  it("finalizes only after a confirmed cover, then writes the final privacy", async () => {
+  it("records the video with its visibility at once, and closes only when the cover is confirmed", async () => {
     const id = await queued();
     await service(() => db.query("select begin_upload($1)", [id]));
-    await service(() => db.query("select record_youtube_video($1, 'yt-b')", [id]));
+    // The guard on youtube_publications still applies: no public without an authorization.
+    await expect(service(() => db.query("select record_youtube_video($1, 'yt-b', 'public')", [id]))).rejects.toThrow("public upload without authorization");
+    await db.query("update publication_queue set privacy = 'public', public_authorized_at = now(), public_authorized_policy = 'autopilot' where id = $1", [id]);
+    await service(() => db.query("select record_youtube_video($1, 'yt-b', 'public')", [id]));
+    expect(await one("select privacy from youtube_publications where queue_id = $1", [id])).toEqual({ privacy: "public" });
+    expect(await status(id)).toMatchObject({ status: "processing", thumbnail_status: "pending" });
 
     const claimed = (await service(() => one("select claim_finalize($1) as item", [id]))).item as Row;
-    expect(claimed).toMatchObject({ youtube_video_id: "yt-b", script_approved: true, thumbnail_status: "pending" });
+    expect(claimed).toMatchObject({ youtube_video_id: "yt-b", youtube_privacy: "public", thumbnail_status: "pending" });
     expect((await service(() => one("select claim_finalize($1) as item", [id]))).item).toBeNull();
 
-    await expect(service(() => db.query("select complete_publication($1, 'public')", [id]))).rejects.toThrow("cover not confirmed");
     await service(() => db.query("select confirm_thumbnail($1)", [id]));
-    // The guard on youtube_publications still applies: no public without an authorization.
-    await expect(service(() => db.query("select complete_publication($1, 'public')", [id]))).rejects.toThrow("public upload without authorization");
-    await db.query("update publication_queue set privacy = 'public', public_authorized_at = now(), public_authorized_policy = 'autopilot' where id = $1", [id]);
-    await service(() => db.query("select complete_publication($1, 'public')", [id]));
     expect(await status(id)).toMatchObject({ status: "uploaded", thumbnail_status: "set" });
-    expect(await one("select privacy from youtube_publications where queue_id = $1", [id])).toEqual({ privacy: "public" });
+    expect((await one("select thumbnail_set_at is not null as set from publication_queue where id = $1", [id])).set).toBe(true);
+    await expect(service(() => db.query("select confirm_thumbnail($1)", [id]))).rejects.toThrow("not being finalized");
   });
 
   it("records cover failures apart, and stops retrying after the limit", async () => {
     const id = await queued();
     await service(() => db.query("select begin_upload($1)", [id]));
-    await service(() => db.query("select record_youtube_video($1, 'yt-c')", [id]));
+    await service(() => db.query("select record_youtube_video($1, 'yt-c', 'private')", [id]));
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       await service(() => db.query("select claim_finalize($1)", [id]));
       await service(() => db.query("select fail_thumbnail($1, 'thumbnail_set_failed:403:forbidden')", [id]));
@@ -122,7 +123,7 @@ describe("two-stage upload", () => {
   it("releases an item still processing without counting a cover failure", async () => {
     const id = await queued();
     await service(() => db.query("select begin_upload($1)", [id]));
-    await service(() => db.query("select record_youtube_video($1, 'yt-d')", [id]));
+    await service(() => db.query("select record_youtube_video($1, 'yt-d', 'private')", [id]));
     await service(() => db.query("select claim_finalize($1)", [id]));
     await service(() => db.query("select release_finalize($1, 'youtube_processing')", [id]));
     expect(await status(id)).toMatchObject({ status: "processing", thumbnail_attempts: 0, last_error: "youtube_processing" });
@@ -131,7 +132,7 @@ describe("two-stage upload", () => {
   it("lets another runner take over a claim left by a crashed one", async () => {
     const id = await queued();
     await service(() => db.query("select begin_upload($1)", [id]));
-    await service(() => db.query("select record_youtube_video($1, 'yt-e')", [id]));
+    await service(() => db.query("select record_youtube_video($1, 'yt-e', 'private')", [id]));
     await service(() => db.query("select claim_finalize($1)", [id]));
     await db.query("update publication_queue set finalize_started_at = now() - interval '31 minutes' where id = $1", [id]);
     expect((await service(() => one("select claim_finalize($1) as item", [id]))).item).not.toBeNull();
@@ -141,12 +142,12 @@ describe("two-stage upload", () => {
     const versionId = await version({ cover: false });
     const asset = await one("select id from media_assets where script_version_id = $1 and kind = 'video'", [versionId]);
     const row = await one(`insert into publication_queue (script_version_id, video_asset_id, title, description, status) values ($1, $2, 'T', 'D', 'uploading') returning id`, [versionId, asset.id]);
-    await expect(service(() => db.query("select record_youtube_video($1, 'yt-f')", [row.id]))).rejects.toThrow("not uploading with a cover");
+    await expect(service(() => db.query("select record_youtube_video($1, 'yt-f', 'private')", [row.id]))).rejects.toThrow("not uploading with a cover");
   });
 
   it("is closed to editors and the public", async () => {
     const id = await queued();
-    for (const fn of ["record_youtube_video($1, 'x')", "claim_finalize($1)", "confirm_thumbnail($1)", "complete_publication($1, 'public')", "fail_thumbnail($1, 'x')", "release_finalize($1, 'x')"]) {
+    for (const fn of ["record_youtube_video($1, 'x', 'private')", "claim_finalize($1)", "confirm_thumbnail($1)", "fail_thumbnail($1, 'x')", "release_finalize($1, 'x')"]) {
       await expect(asRole(db, "authenticated", EDITOR, () => db.query(`select ${fn}`, [id]))).rejects.toThrow("permission denied");
     }
   });

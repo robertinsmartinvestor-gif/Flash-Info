@@ -4,11 +4,10 @@ import type { PrivacyStatus, PublicationConfig } from "@/src/core/publication-po
 import {
   apiErrorCode,
   buildInsertRequest,
-  FINALIZE_SCOPES,
-  finalVisibility,
   recordedPrivacy,
   UploadRefusedError,
   type FinalizeItem,
+  type ProcessingStatus,
   type QueueItem,
   type YoutubeApi,
 } from "./youtube";
@@ -19,12 +18,13 @@ export interface PublicationStore {
   failUpload(queueId: string, error: string): Promise<void>;
   /** Old single-step path, for items queued before covers existed. */
   registerUpload(queueId: string, videoId: string, privacy: PrivacyStatus): Promise<void>;
-  recordVideo(queueId: string, videoId: string): Promise<void>;
+  /** The video is on YouTube with its final visibility; the cover is still to come. */
+  recordVideo(queueId: string, videoId: string, privacy: PrivacyStatus): Promise<void>;
   claimFinalize(queueId: string): Promise<FinalizeItem | null>;
   releaseFinalize(queueId: string, reason: string): Promise<void>;
   failThumbnail(queueId: string, error: string): Promise<void>;
+  /** Only after thumbnails.set answered with the new thumbnail. Closes the item. */
   confirmThumbnail(queueId: string): Promise<void>;
-  completePublication(queueId: string, privacy: PrivacyStatus): Promise<void>;
   download(storagePath: string): Promise<Uint8Array>;
 }
 
@@ -43,12 +43,12 @@ export interface PublishDeps {
 export type PublishOutcome =
   | { stage: "nothing" }
   | { stage: "uploaded_without_cover"; videoId: string; privacy: PrivacyStatus }
-  | { stage: "waiting_processing"; videoId: string }
-  | { stage: "thumbnail_failed"; videoId: string; error: string }
-  | { stage: "held_private"; videoId: string; reason: string }
-  | { stage: "published_with_cover"; videoId: string; privacy: PrivacyStatus };
+  | { stage: "waiting_processing"; videoId: string; privacy: PrivacyStatus | null }
+  | { stage: "thumbnail_failed"; videoId: string; privacy: PrivacyStatus | null; error: string }
+  | { stage: "processing_failed"; videoId: string; reason: string }
+  | { stage: "cover_set"; videoId: string; privacy: PrivacyStatus | null };
 
-/** Errors after videos.insert succeeded carry this flag: the item must stay where it is, never be uploaded again. */
+/** Errors after videos.insert succeeded: the item must stay where it is, never be uploaded again. */
 class VideoExistsError extends Error {
   constructor(message: string) {
     super(message);
@@ -72,9 +72,10 @@ async function saveTemp(deps: PublishDeps, storagePath: string, name: string, mi
 }
 
 /**
- * Stage one: videos.insert, once. An item with a cover goes up private and its
- * id is recorded at once; from then on begin_upload refuses it, so no error can
- * lead to a second insert.
+ * Stage one: videos.insert, once, with the visibility decideUpload() allows, so
+ * a public video goes out at once and notifies subscribers. The id is recorded
+ * right away; from then on begin_upload refuses the item, so no error can lead
+ * to a second insert.
  */
 async function upload(deps: PublishDeps, item: QueueItem): Promise<PublishOutcome | null> {
   const { store, api, config } = deps;
@@ -83,25 +84,21 @@ async function upload(deps: PublishDeps, item: QueueItem): Promise<PublishOutcom
     const request = buildInsertRequest(config, item, now);
     if (!item.storage_path) throw new Error("video_asset_missing");
     const withCover = Boolean(item.thumbnail_asset_id);
-    if (withCover) {
-      if (!item.thumbnail_path) throw new Error("thumbnail_asset_missing");
-      // Checked before the insert: without these scopes the video would stay private with no way to finish it.
-      const scopes = await api.grantedScopes().catch(() => [] as string[]);
-      if (!scopes.some((scope) => FINALIZE_SCOPES.includes(scope))) throw new Error("youtube_scope_missing");
-    }
+    // A queued cover that is gone is caught before the upload, not after.
+    if (withCover && !item.thumbnail_path) throw new Error("thumbnail_asset_missing");
     const videoPath = await saveTemp(deps, item.storage_path, `${item.id}.mp4`, "video_download_failed");
     const videoId = await api.insert(request, videoPath).catch((error: unknown) => {
       throw new Error(apiErrorCode("youtube_insert_failed", error));
     });
 
+    const privacy = recordedPrivacy(request.requestBody.status);
     if (!withCover) {
-      const privacy = recordedPrivacy(request.requestBody.status);
       await store.registerUpload(item.id, videoId, privacy).catch(() => {
         throw new VideoExistsError(`upload_not_registered:${videoId}`);
       });
       return { stage: "uploaded_without_cover", videoId, privacy };
     }
-    await store.recordVideo(item.id, videoId).catch(() => {
+    await store.recordVideo(item.id, videoId, privacy).catch(() => {
       throw new VideoExistsError(`upload_not_registered:${videoId}`);
     });
     return null;
@@ -112,71 +109,77 @@ async function upload(deps: PublishDeps, item: QueueItem): Promise<PublishOutcom
   }
 }
 
+/** Processing status, or "unknown" when the token may not read it (videos.list needs more than youtube.upload). */
+async function processing(api: YoutubeApi, videoId: string): Promise<ProcessingStatus | "unknown"> {
+  try {
+    return await api.processingStatus(videoId);
+  } catch {
+    return "unknown";
+  }
+}
+
 /**
- * Stage two, repeatable: wait for processing, set the cover, then apply the
- * visibility decideUpload() allows. The video stays private until the API has
- * confirmed the cover.
+ * Stage two, repeatable: wait for YouTube's processing (thumbnails.set on a Short
+ * works only after it), then set the cover on the video, which already has its
+ * final visibility. The item closes only when the API confirms the cover.
  */
 async function finalize(deps: PublishDeps, queueId: string): Promise<PublishOutcome> {
-  const { store, api, config } = deps;
+  const { store, api } = deps;
   const item = await store.claimFinalize(queueId);
   if (!item) return { stage: "nothing" };
   const videoId = item.youtube_video_id;
+  const privacy = item.youtube_privacy ?? null;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const checks = deps.processingChecks ?? 12;
+  const interval = deps.processingIntervalMs ?? 15_000;
 
-  let processing: string = "processing";
-  for (let check = 0; check < (deps.processingChecks ?? 12); check += 1) {
-    if (check > 0) await sleep(deps.processingIntervalMs ?? 15_000);
-    processing = await api.processingStatus(videoId).catch((error: unknown) => apiErrorCode("youtube_list_failed", error));
-    if (processing !== "processing") break;
+  let status: ProcessingStatus | "unknown" = "processing";
+  for (let check = 0; check < checks; check += 1) {
+    if (check > 0) await sleep(interval);
+    status = await processing(api, videoId);
+    if (status !== "processing") break;
   }
-  if (processing === "processing") {
+  if (status === "processing") {
     await store.releaseFinalize(queueId, "youtube_processing");
-    return { stage: "waiting_processing", videoId };
+    return { stage: "waiting_processing", videoId, privacy };
   }
-  if (processing !== "succeeded") {
-    const reason = processing.startsWith("youtube_") ? processing : `youtube_processing_${processing}`;
+  if (status === "failed" || status === "terminated" || status === "missing") {
+    const reason = `youtube_processing_${status}`;
     await store.releaseFinalize(queueId, reason);
-    return { stage: "held_private", videoId, reason };
+    return { stage: "processing_failed", videoId, reason };
   }
 
-  if (item.thumbnail_status !== "set") {
-    try {
-      if (!item.thumbnail_path) throw new Error("thumbnail_asset_missing");
-      const pngPath = await saveTemp(deps, item.thumbnail_path, `${queueId}.png`, "thumbnail_download_failed");
-      const confirmed = await api.setThumbnail(videoId, pngPath).catch((error: unknown) => {
-        throw new Error(apiErrorCode("thumbnail_set_failed", error));
-      });
-      if (!confirmed) throw new Error("thumbnail_not_confirmed");
-    } catch (error) {
-      const code = codeOf(error, "thumbnail_failed");
-      await store.failThumbnail(queueId, code);
-      return { stage: "thumbnail_failed", videoId, error: code };
-    }
-    await store.confirmThumbnail(queueId);
-  }
-
-  // The policy is applied again here: an authorization withdrawn meanwhile keeps the video private.
-  let status;
+  let pngPath: string;
   try {
-    status = finalVisibility(config, item, (deps.now ?? (() => new Date()))());
+    if (!item.thumbnail_path) throw new Error("thumbnail_asset_missing");
+    pngPath = await saveTemp(deps, item.thumbnail_path, `${queueId}.png`, "thumbnail_download_failed");
   } catch (error) {
-    const reason = codeOf(error, "visibility_refused");
-    await store.releaseFinalize(queueId, reason);
-    return { stage: "held_private", videoId, reason };
+    const code = codeOf(error, "thumbnail_failed");
+    await store.failThumbnail(queueId, code);
+    return { stage: "thumbnail_failed", videoId, privacy, error: code };
   }
-  if (status.privacyStatus !== "private" || status.publishAt) {
+
+  // Without a readable status, a few spaced tries stand in for the processing check. They count as one attempt.
+  const tries = status === "unknown" ? 4 : 1;
+  let code = "thumbnail_failed";
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    if (attempt > 0 || status === "unknown") await sleep(Math.max(interval, 30_000));
     try {
-      await api.updateStatus(videoId, status);
+      if (await api.setThumbnail(videoId, pngPath)) {
+        code = "";
+        break;
+      }
+      code = "thumbnail_not_confirmed";
     } catch (error) {
-      const reason = apiErrorCode("visibility_update_failed", error);
-      await store.releaseFinalize(queueId, reason);
-      return { stage: "held_private", videoId, reason };
+      code = apiErrorCode("thumbnail_set_failed", error);
     }
   }
-  const privacy = recordedPrivacy(status);
-  await store.completePublication(queueId, privacy);
-  return { stage: "published_with_cover", videoId, privacy };
+  if (code) {
+    await store.failThumbnail(queueId, code);
+    return { stage: "thumbnail_failed", videoId, privacy, error: code };
+  }
+  await store.confirmThumbnail(queueId);
+  return { stage: "cover_set", videoId, privacy };
 }
 
 /** One queue item, wherever it stands: a new upload, or a retry that resumes from the YouTube id already recorded. */

@@ -49,7 +49,7 @@ export const PUBLICATION_STATUS: Record<string, { label: string; tone: Tone }> =
   pending: { label: "In coda", tone: "info" },
   scheduled: { label: "Programmato", tone: "info" },
   uploading: { label: "In caricamento", tone: "warn" },
-  processing: { label: "Su YouTube, privato: attende copertina", tone: "warn" },
+  processing: { label: "Caricato, copertina in arrivo", tone: "warn" },
   finalizing: { label: "Copertina in corso", tone: "warn" },
   uploaded: { label: "Caricato", tone: "ok" },
   failed: { label: "Non riuscito", tone: "bad" },

@@ -22,6 +22,8 @@ export interface QueueItem {
 /** An item already on YouTube, waiting for its cover or its final visibility. */
 export interface FinalizeItem extends QueueItem {
   youtube_video_id: string;
+  /** The visibility the video got at insert time. */
+  youtube_privacy: PrivacyStatus | null;
   thumbnail_status: "pending" | "set" | "failed" | null;
   thumbnail_attempts: number;
 }
@@ -85,21 +87,15 @@ export function recordedPrivacy(status: VideoStatus): PrivacyStatus {
 }
 
 /**
- * Builds the insert request after applying the publication policy. An item with
- * a cover is always inserted private, without publishAt: it changes visibility
- * only after the API confirms the cover (see publishQueueItem). Items queued
- * before covers existed keep the old single step.
+ * Builds the insert request after applying the publication policy. The video
+ * goes up with its final visibility at once, so subscribers are notified; the
+ * cover follows on the published video (see publishQueueItem).
  */
 export function buildInsertRequest(config: PublicationConfig, item: QueueItem, now = new Date()): InsertRequest {
-  const final = finalVisibility(config, item, now);
-  const withCover = Boolean(item.thumbnail_asset_id);
-  const status: VideoStatus = withCover
-    ? { privacyStatus: "private", selfDeclaredMadeForKids: false, containsSyntheticMedia: item.contains_synthetic_media }
-    : final;
+  const status = finalVisibility(config, item, now);
   return {
     part: ["snippet", "status"],
-    // Only read by YouTube at insert time: a video made public later notifies nobody.
-    notifySubscribers: !withCover && recordedPrivacy(final) === "public",
+    notifySubscribers: recordedPrivacy(status) === "public",
     requestBody: {
       snippet: {
         title: item.title,
@@ -120,19 +116,15 @@ export interface YoutubeCredentials {
   refreshToken: string;
 }
 
-/** Scopes that allow videos.list on processing details, thumbnails.set and videos.update. */
-export const FINALIZE_SCOPES = ["https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.force-ssl"];
-
 export type ProcessingStatus = "processing" | "succeeded" | "failed" | "terminated" | "missing";
 
 /** The YouTube calls the publication needs, behind an interface so the flow can be tested without the network. */
 export interface YoutubeApi {
-  grantedScopes(): Promise<string[]>;
   insert(request: InsertRequest, videoPath: string): Promise<string>;
+  /** Needs a read scope beyond youtube.upload: callers must cope with it failing. */
   processingStatus(videoId: string): Promise<ProcessingStatus>;
-  /** True only when the API answered with the new thumbnail. */
+  /** True only when the API answered with the new thumbnail. Works with youtube.upload. */
   setThumbnail(videoId: string, pngPath: string): Promise<boolean>;
-  updateStatus(videoId: string, status: VideoStatus): Promise<void>;
 }
 
 /** A short, public-log-safe code for an API error: HTTP status and Google's reason, never a message body. */
@@ -149,11 +141,6 @@ export function createYoutubeApi(credentials: YoutubeCredentials): YoutubeApi {
   const youtube = google.youtube({ version: "v3", auth });
 
   return {
-    async grantedScopes() {
-      const { token } = await auth.getAccessToken();
-      if (!token) return [];
-      return (await auth.getTokenInfo(token)).scopes ?? [];
-    },
     async insert(request, videoPath) {
       const response = await youtube.videos.insert({ ...request, media: { mimeType: "video/mp4", body: createReadStream(videoPath) } });
       if (!response.data.id) throw new Error("youtube_no_video_id");
@@ -169,10 +156,6 @@ export function createYoutubeApi(credentials: YoutubeCredentials): YoutubeApi {
     async setThumbnail(videoId, pngPath) {
       const response = await youtube.thumbnails.set({ videoId, media: { mimeType: "image/png", body: createReadStream(pngPath) } });
       return (response.data.items?.length ?? 0) > 0;
-    },
-    async updateStatus(videoId, status) {
-      // part=status replaces the whole status: every field we rely on is sent again.
-      await youtube.videos.update({ part: ["status"], requestBody: { id: videoId, status } });
     },
   };
 }

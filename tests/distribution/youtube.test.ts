@@ -65,10 +65,10 @@ describe("autopilot authorization", () => {
 describe("items with a cover", () => {
   const withCover = { thumbnail_asset_id: "t", thumbnail_path: "thumbnail/v/cover-v1.png" };
 
-  it("are always inserted private, with no schedule and no notification", () => {
-    const request = buildInsertRequest(live, item({ ...authorized, ...withCover, publish_at: "2026-12-01T10:00:00Z" }), NOW);
-    expect(request.requestBody.status).toEqual({ privacyStatus: "private", selfDeclaredMadeForKids: false, containsSyntheticMedia: true });
-    expect(request.notifySubscribers).toBe(false);
+  it("go up with their final visibility at once, notifying subscribers when public", () => {
+    const request = buildInsertRequest(live, item({ ...authorized, ...withCover }), NOW);
+    expect(request.requestBody.status).toEqual({ privacyStatus: "public", selfDeclaredMadeForKids: false, containsSyntheticMedia: true });
+    expect(request.notifySubscribers).toBe(true);
   });
 
   it("are still refused at insert time when the policy refuses them", () => {

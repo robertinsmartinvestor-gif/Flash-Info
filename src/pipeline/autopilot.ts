@@ -23,7 +23,7 @@ export interface AutopilotStore {
   freshApprovedVersions(): Promise<VersionInProduction[]>;
   enqueueJob(versionId: string, kind: "tts" | "render"): Promise<void>;
   queuePublic(versionId: string): Promise<void>;
-  /** Public, authorized items waiting for their upload, and items on YouTube still waiting for cover or visibility. */
+  /** Public, authorized items waiting for their upload, and items on YouTube still waiting for their cover. */
   pendingPublicUploads(): Promise<string[]>;
 }
 

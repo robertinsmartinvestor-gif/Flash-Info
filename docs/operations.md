@@ -125,9 +125,9 @@ esistere. Il log del job riporta `upload_not_registered:<id YouTube>` quando il 
 ma l'id non è stato salvato. Controlla YouTube Studio, poi:
 
 - voce **con copertina** (`thumbnail_asset_id` valorizzato) e video presente: registra l'id con
-  `select record_youtube_video('<queue_id>', '<id YouTube>')` (ruolo service). La voce passa in
-  `processing` e il giro successivo del pilota, o **Distribution** con lo stesso `queue_id`, mette la
-  copertina e applica la visibilità. Il video non viene caricato di nuovo;
+  `select record_youtube_video('<queue_id>', '<id YouTube>', '<privacy su YouTube>')` (ruolo
+  service). La voce passa in `processing` e il giro successivo del pilota, o **Distribution** con lo
+  stesso `queue_id`, mette la copertina. Il video non viene caricato di nuovo;
 - voce **senza copertina** e video presente: `register_youtube_upload` come prima;
 - video assente: riporta la voce in `failed`, il giro successivo la ricarica.
 
@@ -176,23 +176,29 @@ la mette in coda.
 
 **Upload in due tempi.**
 
-1. `uploading`: `videos.insert` sempre **privato**, senza `publishAt`. L'id restituito viene salvato
-   subito (`record_youtube_video`) e da lì la voce non può più essere caricata di nuovo.
-2. `processing` / `finalizing`. In un giro:
+1. `uploading`: `videos.insert` con la visibilità finale decisa da `decideUpload()`. Un video
+   pubblico esce subito e notifica gli iscritti, come prima delle copertine. L'id restituito viene
+   salvato subito, con la sua visibilità (`record_youtube_video`); da lì la voce non può più essere
+   caricata di nuovo.
+2. `processing` / `finalizing`: la copertina viene applicata sul video già pubblicato. In un giro:
    - attesa con tentativi limitati che `videos.list` riporti `processingStatus = succeeded`
-     (12 controlli ogni 15 s, poi riprova al giro dopo);
+     (12 controlli ogni 15 s, poi riprova al giro dopo). Sugli Short `thumbnails.set` funziona
+     solo a elaborazione conclusa;
+   - se il token non può leggere lo stato (serve uno scope oltre a `youtube.upload`), al posto del
+     controllo fa fino a 4 tentativi distanziati di 30 s, contati come un tentativo solo;
    - `thumbnails.set` con il PNG;
-   - conferma della copertina solo se l'API risponde con la nuova miniatura;
-   - visibilità finale calcolata di nuovo da `decideUpload()`, con `videos.update`.
-3. `uploaded`: copertina confermata e visibilità applicata. Il log dice "Copertina confermata da
-   YouTube" solo a questo punto.
+   - conferma solo se l'API risponde con la nuova miniatura.
+3. `uploaded`: copertina confermata. Il log dice "Copertina confermata da YouTube" solo a questo punto.
 
-Un `publishAt` futuro diventa privato + `publishAt`; uno già passato diventa pubblico subito, mai prima
-del dovuto. Se nel frattempo l'autorizzazione è venuta meno, il video resta privato.
+La visibilità non cambia mai dopo l'upload: nessuna chiamata a `videos.update`. Un `publishAt` futuro
+diventa privato + `publishAt`; uno già passato diventa pubblico subito, mai prima del dovuto.
+
+Per qualche minuto il video pubblico mostra la miniatura automatica di YouTube, finché la copertina
+non viene confermata. Se YouTube elabora a lungo, la copertina arriva al giro successivo del pilota.
 
 Errori della copertina: `thumbnail_status = failed`, `thumbnail_attempts` e `thumbnail_error`, separati
-da `last_error`. Il video resta privato e il pilota ritenta a ogni giro, fino a 5 tentativi, ripartendo
-dall'id YouTube salvato. Dopo 5 tentativi serve una persona:
+da `last_error`. Il video resta visibile con la miniatura automatica e il pilota ritenta a ogni giro,
+fino a 5 tentativi, ripartendo dall'id YouTube salvato. Dopo 5 tentativi serve una persona:
 
 1. guarda `thumbnail_error`;
 2. carica la copertina a mano da YouTube Studio, se serve;
@@ -200,36 +206,28 @@ dall'id YouTube salvato. Dopo 5 tentativi serve una persona:
 
 Un runner interrotto in `finalizing` libera la voce dopo 30 minuti.
 
-**Permessi.** `thumbnails.set` accetta lo scope `youtube.upload`, ma `videos.update` e i dettagli di
-elaborazione di `videos.list` richiedono `youtube` o `youtube.force-ssl`. Il job lo controlla
-**prima** di caricare: senza scope la voce va in `failed` con `youtube_scope_missing` e nessun video
-viene caricato. Il workflow **Test Token** stampa gli scope del refresh token (sono nomi di
-permessi, non segreti) e avvisa se manca quello necessario. In quel caso il refresh token va
-rigenerato includendo `https://www.googleapis.com/auth/youtube.force-ssl` (e, già che ci sei,
-`yt-analytics.readonly`).
-
-Un video reso pubblico dopo il caricamento non invia la notifica agli iscritti: YouTube la legge solo
-in `videos.insert`.
+**Permessi.** `thumbnails.set` funziona con lo scope `youtube.upload`, quello del token attuale. Lo
+stato di elaborazione di `videos.list` richiede `youtube` o `youtube.force-ssl`; senza, il job usa i
+tentativi distanziati descritti sopra. Il workflow **Test Token** stampa gli scope del refresh token
+(sono nomi di permessi, non segreti). Aggiungere `youtube.force-ssl` alla prossima rigenerazione del
+token, insieme a `yt-analytics.readonly`, rende il controllo preciso, ma non è necessario.
 
 **Quota YouTube Data API** (10.000 unità al giorno di default), per ogni Short:
 
 | Chiamata | Costo | Note |
 | --- | --- | --- |
 | `videos.insert` | vedi nota | La pagina di riferimento oggi indica un contingente "Video Uploads" separato (100 upload al giorno); in passato erano 1.600 unità. Verifica in Google Cloud Console |
-| `videos.list` | 1 unità per controllo | Al massimo 12 per giro |
-| `thumbnails.set` | circa 50 | Per tentativo |
-| `videos.update` | 50 | Solo se la visibilità finale non è "privato" |
+| `videos.list` | 1 unità per controllo | Al massimo 12 per giro; nessuna se lo scope non lo consente |
+| `thumbnails.set` | circa 50 | Per chiamata, fino a 4 per giro senza lo stato di elaborazione |
 
-Con 3 Short al giorno la copertina aggiunge circa 300–350 unità.
+Con 3 Short al giorno la copertina aggiunge circa 150–650 unità, a seconda dei tentativi.
 
 **Rollback.**
 
 1. Revert del merge: il codice torna all'upload in un passo. Le colonne nuove sono facoltative e le
    voci vecchie non le usano.
-2. Le voci già in `processing` vanno completate a mano in YouTube Studio:
-   - copertina e visibilità;
-   - poi `update publication_queue set status = 'uploaded'` e la privacy giusta in
-     `youtube_publications`.
+2. Le voci già in `processing` sono già pubblicate con la loro visibilità: carica la copertina a mano
+   in YouTube Studio, se serve, poi `update publication_queue set status = 'uploaded'`.
 3. La migrazione può restare: è solo in avanti, ma `queue_item` richiede la copertina. Se il codice
    torna indietro, riapplica la versione precedente di `private.queue_item` da
    `20261108000200_autopilot.sql`, altrimenti nessuna voce nuova entra in coda.

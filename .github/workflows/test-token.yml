@@ -30,10 +30,13 @@ jobs:
           if [ "$status" = "200" ]; then
             scopes=$(jq -r '.scope // ""' "$body")
             echo "Scopes: $scopes"
-            # The cover needs videos.list, thumbnails.set and videos.update: youtube or youtube.force-ssl.
+            # thumbnails.set works with youtube.upload. Reading YouTube's processing
+            # status needs youtube or youtube.force-ssl: without it the cover job
+            # just waits and retries a few times instead of checking.
             case " $scopes " in
-              *" https://www.googleapis.com/auth/youtube "*|*" https://www.googleapis.com/auth/youtube.force-ssl "*) echo "Copertine: scope sufficiente." ;;
-              *) echo "::warning::Copertine: manca lo scope youtube o youtube.force-ssl, il refresh token va rigenerato." ;;
+              *" https://www.googleapis.com/auth/youtube "*|*" https://www.googleapis.com/auth/youtube.force-ssl "*) echo "Copertine: scope completo." ;;
+              *" https://www.googleapis.com/auth/youtube.upload "*) echo "Copertine: scope sufficiente (stato di elaborazione non leggibile, si usano tentativi distanziati)." ;;
+              *) echo "::warning::Copertine: manca anche youtube.upload, il refresh token va rigenerato." ;;
             esac
           fi
           rm -f "$body"

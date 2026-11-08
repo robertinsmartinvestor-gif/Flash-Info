@@ -80,7 +80,7 @@ jobs:
         run: npm run job:autopilot -- --step advance
 
       # New public uploads and items already on YouTube still waiting for their
-      # cover or visibility. The ids are UUIDs checked by the CLI, and travel
+      # cover. The ids are UUIDs checked by the CLI, and travel
       # through a file, never into the shell text unquoted.
       - name: Upload
         env:

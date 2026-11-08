@@ -4,10 +4,11 @@
 -- 'thumbnail'), and a version enters the publication queue only when both exist.
 -- The upload then runs in two recorded stages, so no error can cause a second
 -- videos.insert:
---   uploading  -> videos.insert, always private; the returned id is recorded at once
---   processing -> on YouTube, private, waiting for processing, cover and visibility
---   finalizing -> a runner holds it: thumbnails.set, then the final visibility
---   uploaded   -> cover confirmed by the API and final visibility applied
+--   uploading  -> videos.insert with the final visibility (public at once when
+--                 authorized, so subscribers are notified); the id is recorded at once
+--   processing -> on YouTube, waiting for processing and the cover
+--   finalizing -> a runner holds it: thumbnails.set
+--   uploaded   -> cover confirmed by the API
 -- Rows queued before this migration have no cover and keep the old single-step path.
 
 alter table public.publication_queue
@@ -130,22 +131,26 @@ end $$;
 
 -- Called right after videos.insert returns. From here the item can never be
 -- uploaded again: begin_upload refuses any row with a youtube_publications entry.
-create or replace function public.record_youtube_video(p_queue_id uuid, p_video_id text)
+-- The guard on youtube_publications still refuses public without an authorization.
+create or replace function public.record_youtube_video(p_queue_id uuid, p_video_id text, p_privacy text)
 returns void
 language plpgsql security definer set search_path = '' as $$
 begin
+  if p_privacy not in ('private', 'unlisted', 'public') then
+    raise exception 'invalid privacy' using errcode = '22023';
+  end if;
   update public.publication_queue
     set status = 'processing', last_error = null
     where id = p_queue_id and status = 'uploading' and thumbnail_asset_id is not null;
   if not found then
     raise exception 'queue item is not uploading with a cover' using errcode = 'P0001';
   end if;
-  -- Private until the cover is confirmed; complete_publication writes the final value.
-  insert into public.youtube_publications (queue_id, youtube_video_id, privacy) values (p_queue_id, p_video_id, 'private');
-  perform private.write_audit('publication.video_inserted', 'publication_queue', p_queue_id::text, jsonb_build_object('video_id', p_video_id));
+  insert into public.youtube_publications (queue_id, youtube_video_id, privacy) values (p_queue_id, p_video_id, p_privacy);
+  perform private.write_audit('publication.video_inserted', 'publication_queue', p_queue_id::text,
+    jsonb_build_object('video_id', p_video_id, 'privacy', p_privacy));
 end $$;
 
--- Takes an item that is on YouTube and still needs its cover or its visibility.
+-- Takes an item that is on YouTube and still needs its cover.
 -- One runner at a time; a runner that died releases the item after 30 minutes.
 create or replace function public.claim_finalize(p_queue_id uuid)
 returns jsonb
@@ -154,6 +159,7 @@ declare
   v_row public.publication_queue;
   v_approved boolean;
   v_video text;
+  v_privacy text;
   v_thumbnail_path text;
 begin
   update public.publication_queue
@@ -169,14 +175,15 @@ begin
   select exists (
     select 1 from public.scripts s where s.approved_version_id = v_row.script_version_id and s.status = 'approved'
   ) into v_approved;
-  select youtube_video_id into v_video from public.youtube_publications where queue_id = p_queue_id;
+  select youtube_video_id, privacy into v_video, v_privacy from public.youtube_publications where queue_id = p_queue_id;
   select storage_path into v_thumbnail_path from public.media_assets
     where id = v_row.thumbnail_asset_id and deleted_at is null;
-  return to_jsonb(v_row) || jsonb_build_object('youtube_video_id', v_video, 'thumbnail_path', v_thumbnail_path, 'script_approved', v_approved);
+  return to_jsonb(v_row) || jsonb_build_object(
+    'youtube_video_id', v_video, 'youtube_privacy', v_privacy, 'thumbnail_path', v_thumbnail_path, 'script_approved', v_approved
+  );
 end $$;
 
--- Gives the item back without counting a cover failure: YouTube still processing,
--- or the visibility update failed after a confirmed cover.
+-- Gives the item back without counting a cover failure: YouTube still processing.
 create or replace function public.release_finalize(p_queue_id uuid, p_reason text)
 returns void
 language plpgsql security definer set search_path = '' as $$
@@ -200,36 +207,19 @@ begin
   end if;
 end $$;
 
--- Only after thumbnails.set answered with the new cover.
+-- Only after thumbnails.set answered with the new cover. Closes the item.
 create or replace function public.confirm_thumbnail(p_queue_id uuid)
 returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   update public.publication_queue
-    set thumbnail_status = 'set', thumbnail_set_at = now(), thumbnail_error = null
+    set status = 'uploaded', thumbnail_status = 'set', thumbnail_set_at = now(), thumbnail_error = null,
+        last_error = null, finalize_started_at = null
     where id = p_queue_id and status = 'finalizing';
   if not found then
     raise exception 'queue item is not being finalized' using errcode = 'P0001';
   end if;
   perform private.write_audit('publication.thumbnail_set', 'publication_queue', p_queue_id::text);
-end $$;
-
--- The end: cover confirmed and final visibility applied on YouTube.
-create or replace function public.complete_publication(p_queue_id uuid, p_privacy text)
-returns void
-language plpgsql security definer set search_path = '' as $$
-begin
-  if p_privacy not in ('private', 'unlisted', 'public') then
-    raise exception 'invalid privacy' using errcode = '22023';
-  end if;
-  update public.publication_queue
-    set status = 'uploaded', last_error = null, finalize_started_at = null
-    where id = p_queue_id and status = 'finalizing' and thumbnail_status = 'set';
-  if not found then
-    raise exception 'cover not confirmed' using errcode = 'P0001';
-  end if;
-  update public.youtube_publications set privacy = p_privacy where queue_id = p_queue_id;
-  perform private.write_audit('publication.completed', 'publication_queue', p_queue_id::text, jsonb_build_object('privacy', p_privacy));
 end $$;
 
 -- Covers, like videos, survive their expiry date until the upload is over.
@@ -249,15 +239,13 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 revoke all on function private.max_thumbnail_attempts() from public, anon, authenticated;
-revoke all on function public.record_youtube_video(uuid, text) from public, anon, authenticated;
+revoke all on function public.record_youtube_video(uuid, text, text) from public, anon, authenticated;
 revoke all on function public.claim_finalize(uuid) from public, anon, authenticated;
 revoke all on function public.release_finalize(uuid, text) from public, anon, authenticated;
 revoke all on function public.fail_thumbnail(uuid, text) from public, anon, authenticated;
 revoke all on function public.confirm_thumbnail(uuid) from public, anon, authenticated;
-revoke all on function public.complete_publication(uuid, text) from public, anon, authenticated;
-grant execute on function public.record_youtube_video(uuid, text) to service_role;
+grant execute on function public.record_youtube_video(uuid, text, text) to service_role;
 grant execute on function public.claim_finalize(uuid) to service_role;
 grant execute on function public.release_finalize(uuid, text) to service_role;
 grant execute on function public.fail_thumbnail(uuid, text) to service_role;
 grant execute on function public.confirm_thumbnail(uuid) to service_role;
-grant execute on function public.complete_publication(uuid, text) to service_role;

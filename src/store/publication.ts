@@ -24,8 +24,8 @@ export class SupabasePublicationStore implements PublicationStore {
     return this.call<void>("register_youtube_upload", { p_queue_id: queueId, p_video_id: videoId, p_privacy: privacy });
   }
 
-  recordVideo(queueId: string, videoId: string) {
-    return this.call<void>("record_youtube_video", { p_queue_id: queueId, p_video_id: videoId });
+  recordVideo(queueId: string, videoId: string, privacy: PrivacyStatus) {
+    return this.call<void>("record_youtube_video", { p_queue_id: queueId, p_video_id: videoId, p_privacy: privacy });
   }
 
   claimFinalize(queueId: string) {
@@ -42,10 +42,6 @@ export class SupabasePublicationStore implements PublicationStore {
 
   confirmThumbnail(queueId: string) {
     return this.call<void>("confirm_thumbnail", { p_queue_id: queueId });
-  }
-
-  completePublication(queueId: string, privacy: PrivacyStatus) {
-    return this.call<void>("complete_publication", { p_queue_id: queueId, p_privacy: privacy });
   }
 
   async download(storagePath: string): Promise<Uint8Array> {

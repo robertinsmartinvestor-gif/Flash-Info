@@ -74,7 +74,7 @@ export class SupabaseAutopilotStore implements AutopilotStore {
     const { data, error } = await this.client
       .from("publication_queue")
       .select("id")
-      // New public uploads, and items already on YouTube that still need their cover or visibility.
+      // New public uploads, and items already on YouTube that still need their cover.
       .or("and(status.eq.pending,privacy.eq.public,public_authorized_at.not.is.null),status.eq.processing,status.eq.finalizing")
       .lt("thumbnail_attempts", 5)
       .order("created_at")
