@@ -29,8 +29,8 @@ interface PublicationState {
 type Production = Partial<Record<"tts" | "render", MediaState>> & { publication?: PublicationState };
 
 const PUBLICATION_LABEL: Record<string, string> = {
-  pending: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
-  scheduled: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
+  pending: "In coda come video privato: n8n avvia l'upload entro 10 minuti, oppure avvia a mano Distribution con questo queue_id.",
+  scheduled: "In coda come video privato: avvia a mano Distribution con questo queue_id.",
   uploading: "Upload in corso. Se resta così a lungo, controlla YouTube Studio prima di riprovare.",
   uploaded: "Caricato su YouTube come privato.",
   cancelled: "Pubblicazione annullata.",
@@ -58,7 +58,7 @@ function Publication({ item, publication, onDone }: { item: ReviewItem; publicat
       {!publication && <button type="button" disabled={busy} onClick={enqueue} style={button}>Metti in coda per YouTube (privato)</button>}
       {publication && (
         <p style={small}>
-          {publication.status === "failed" ? `Upload non riuscito: ${publication.last_error ?? "errore"}. Si può rilanciare il workflow.` : PUBLICATION_LABEL[publication.status] ?? publication.status}
+          {publication.status === "failed" ? `Upload non riuscito: ${publication.last_error ?? "errore"}. n8n non riprova da solo: controlla YouTube Studio, poi rilancia Distribution a mano.` : PUBLICATION_LABEL[publication.status] ?? publication.status}
         </p>
       )}
       {publication && !youtubeId && <p style={small}>queue_id: <code>{publication.id}</code></p>}
@@ -79,7 +79,7 @@ const MEDIA = {
 
 function jobLabel(name: string, job: NonNullable<MediaState["job"]>): string {
   if (job.status === "failed") return `${name} non riuscito: ${job.error_code ?? "errore"}.`;
-  if (job.status === "queued") return `${name} in coda: avvia il workflow Production su GitHub Actions.`;
+  if (job.status === "queued") return `${name} in coda: n8n avvia Production entro 10 minuti, oppure avvialo a mano su GitHub Actions.`;
   if (job.status === "running") return `${name} in produzione.`;
   if (job.status === "succeeded") return `${name} pronto.`;
   if (job.status === "cancelled") return `Produzione ${name.toLowerCase()} annullata.`;

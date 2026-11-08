@@ -30,3 +30,26 @@ describe.each(workflows)("%s", (_file, workflow) => {
     expect(workflow.nodes.every((node) => !/executeCommand|ssh/i.test(node.type))).toBe(true);
   });
 });
+
+describe("production and upload workflow", () => {
+  const workflow = workflows.find(([file]) => file === "ogniora-4-production.json")?.[1];
+  const node = (name: string) => workflow?.nodes.find((n) => n.name === name)?.parameters ?? {};
+
+  it("starts uploads only for pending private items, never failed ones", () => {
+    const url = String(node("Leggi upload privati in attesa").url);
+    expect(url).toContain("status=eq.pending");
+    expect(url).toContain("privacy=eq.private");
+    expect(url).toContain("publish_at=is.null");
+    expect(url).toContain("limit=1");
+  });
+
+  it("passes only the queue id to Distribution", () => {
+    const body = String(node("Avvia Distribution su GitHub").jsonBody);
+    expect(body).toContain('"queue_id"');
+    expect(body).not.toMatch(/privacy|public|publish/i);
+  });
+
+  it("runs Production in produce mode", () => {
+    expect(String(node("Avvia Production su GitHub").jsonBody)).toContain('"mode": "produce"');
+  });
+});

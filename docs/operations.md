@@ -6,7 +6,8 @@
 | --- | --- | --- |
 | `ci.yml` | PR e push su `main` | Typecheck, lint, test, build, audit, gitleaks |
 | `editorial.yml` | n8n o manuale | Raccolta notizie, generazione script |
-| `distribution.yml` | Manuale | Upload di una voce approvata |
+| `production.yml` | n8n o manuale | Audio e video dei job messi in coda dallo Studio |
+| `distribution.yml` | n8n o manuale | Upload privato di una voce approvata |
 | `maintenance.yml` | n8n o manuale | Job bloccati, asset scaduti, retention, spesa |
 | `cron.yml` | Solo manuale | Pipeline legacy |
 
@@ -26,6 +27,7 @@ controlla che i nomi delle credenziali non siano già in uso.
 | 1 - Raccolta notizie | 2 ore | Avvia `editorial.yml` con `ingest` |
 | 2 - Script | 10 minuti | Avvia `compose` per i candidati scelti, massimo 3 per giro |
 | 3 - Controllo | Ogni giorno | Manutenzione e notifica riepilogativa |
+| 4 - Produzione e upload | 10 minuti | Avvia `production.yml` se ci sono job audio o video in coda; avvia `distribution.yml` per una voce `pending` e privata alla volta |
 
 Credenziali da creare in n8n:
 
@@ -38,6 +40,12 @@ La chiave Supabase è la service role: dà pieno accesso ai dati. Se l'istanza n
 altri progetti o persone, va valutato un ruolo di sola lettura dedicato prima di attivare i workflow.
 
 Variabili d'ambiente: `OGNIORA_SUPABASE_URL`, `OGNIORA_NOTIFY_WEBHOOK`.
+
+Il workflow 4 non decide nulla: audio, video e upload partono solo da un clic nello Studio su uno
+script approvato. Riprende solo voci `pending`: un upload `failed` o rimasto in `uploading` resta
+fermo finché non lo controlli. Il canale riceve sempre un video privato, perché `distribution.yml`
+fissa `ALLOW_PUBLIC_PUBLICATION=false`. Un avvio doppio non carica due volte: `begin_upload` e
+`claim_job` assegnano ogni voce una sola volta.
 
 Il workflow 2 legge una volta ogni 10 minuti: con il progetto Supabase attivo, questo tiene
 lontana anche la pausa per inattività del piano free.
@@ -123,7 +131,8 @@ il template. Il suo artifact è pubblico, quindi non deve mai contenere uno scri
    **Metti in coda per YouTube (privato)**. La voce in coda è sempre privata, con
    `containsSyntheticMedia` attivo; titolo, descrizione e tag vengono dai metadati salvati con la
    versione, costruiti dalle fonti citate.
-2. Copia il `queue_id` mostrato e avvia a mano il workflow **Distribution** con quel valore.
+2. Con il workflow n8n 4 attivo l'upload parte entro 10 minuti. Altrimenti copia il `queue_id`
+   mostrato e avvia a mano il workflow **Distribution** con quel valore.
 3. Ricarica la pagina: compare il link a YouTube Studio.
 
 Prima di un upload controlla con il workflow **Test Token** che le credenziali YouTube funzionino.

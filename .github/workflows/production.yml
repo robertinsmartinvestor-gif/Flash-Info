@@ -1,6 +1,6 @@
 name: Production
 
-# Started by hand. Takes the audio and video jobs queued from the Studio: only
+# Started by hand or by n8n (workflow 4). Takes the audio and video jobs queued from the Studio: only
 # approved versions can be queued, and the database caps how many.
 # "sample" renders invented text over silence and touches no data or secret. Its
 # artifact is public, so it must never carry a real script.
