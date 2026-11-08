@@ -23,7 +23,8 @@
     "job:maintenance": "tsx src/cli/maintenance.ts",
     "job:listening-test": "tsx src/cli/listening-test.ts",
     "job:audio": "tsx src/cli/produce-audio.ts",
-    "job:video": "tsx src/cli/produce-video.ts"
+    "job:video": "tsx src/cli/produce-video.ts",
+    "job:autopilot": "tsx src/cli/autopilot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",

@@ -6,6 +6,8 @@
 | --- | --- | --- |
 | `ci.yml` | PR e push su `main` | Typecheck, lint, test, build, audit, gitleaks |
 | `editorial.yml` | n8n o manuale | Raccolta notizie, generazione script |
+| `autopilot.yml` | Ogni ora, 6-22 | Tutta la catena fino all'upload pubblico: vedi "Pilota automatico" |
+| `production.yml` | Manuale | Audio e video dei job in coda |
 | `distribution.yml` | Manuale | Upload di una voce approvata |
 | `maintenance.yml` | n8n o manuale | Job bloccati, asset scaduti, retention, spesa |
 | `cron.yml` | Solo manuale | Pipeline legacy |
@@ -42,6 +44,45 @@ Variabili d'ambiente: `OGNIORA_SUPABASE_URL`, `OGNIORA_NOTIFY_WEBHOOK`.
 Il workflow 2 legge una volta ogni 10 minuti: con il progetto Supabase attivo, questo tiene
 lontana anche la pausa per inattività del piano free.
 
+## Pilota automatico
+
+`autopilot.yml` gira ogni ora dalle 6 alle 22 (ora italiana invernale) e in ogni giro:
+
+1. raccoglie le notizie;
+2. sceglie al massimo un candidato Flash fresco, con il punteggio più alto, e scrive lo script;
+3. lo approva se il QC lo permette;
+4. mette in coda audio, video e pubblicazione degli script approvati nelle ultime 24 ore,
+   anche quelli approvati a mano nello Studio;
+5. carica su YouTube come **pubblico** le voci autorizzate.
+
+Le regole stanno in `app_settings.autopilot` e si cambiano senza deploy:
+
+| Campo | Valore iniziale | Effetto |
+| --- | --- | --- |
+| `enabled` | `true` | `false` ferma ogni passo |
+| `max_stories_per_day` | 3 | Nuove notizie scritte in 24 ore |
+| `min_gap_hours` | 3 | Distanza minima tra due notizie |
+| `max_age_hours` | 24 | Oltre, uno script non viene più prodotto né pubblicato |
+| `candidate_max_age_hours` | 8 | Età massima di un candidato |
+| `hold_checks` | verifier, verifier_unavailable, verifier_incomplete, sensitive_topic, sensational_language | Rilievi che fermano l'approvazione automatica |
+
+Uno script bloccato o con uno dei rilievi in `hold_checks` resta nello Studio: se lo approvi a
+mano, il pilota lo produce e lo pubblica nel giro successivo. Ogni decisione automatica è in
+`audit_logs` con `actor_type = system`: `candidate.auto_selected`, `script.auto_approved`,
+`script.auto_held`, `publication.public_authorized` con `{"by": "autopilot"}`.
+
+Per fermare tutto: *Actions → Autopilot → Disable workflow*, oppure
+
+```sql
+update app_settings set value = jsonb_set(value, '{enabled}', 'false') where key = 'autopilot';
+```
+
+Per togliere un video già pubblicato: YouTube Studio.
+
+Costi: con 3 notizie al giorno circa 0,12 USD l'una (script e voce), quindi circa 11 USD al mese,
+sotto il tetto di `AI_MONTHLY_BUDGET_USD`. Un upload consuma 1.600 delle 10.000 unità giornaliere
+della YouTube Data API.
+
 ## Pubblicazione
 
 Stati di `publication_queue`: `pending`, `scheduled`, `uploading`, `uploaded`, `failed`,
@@ -52,9 +93,10 @@ Perché un video diventi pubblico devono essere vere **tutte** queste condizioni
 1. Script approvato, con QC non bloccato.
 2. Autorizzazione di un utente `admin`, registrata in `publication_queue`.
 3. `ALLOW_PUBLIC_PUBLICATION=true` e `OGNIORA_ENV=production`, impostati **in chiaro** in
-   `distribution.yml`: serve una modifica revisionata al file.
+   `autopilot.yml` e `distribution.yml`: cambiarli richiede una modifica revisionata.
 
-Oggi il workflow fissa `false` e `staging`, quindi il pubblico è impossibile.
+L'autorizzazione al punto 2 può venire anche dal pilota automatico
+(`public_authorized_policy = autopilot`).
 
 Un video privato con `publishAt` diventa pubblico da solo: per questo la data viene inviata a
 YouTube solo se il pubblico è autorizzato. Senza, il video resta privato.

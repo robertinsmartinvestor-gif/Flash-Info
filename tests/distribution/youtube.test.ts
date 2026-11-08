@@ -48,3 +48,14 @@ describe("buildInsertRequest", () => {
     expect(buildInsertRequest(live, item(authorized)).requestBody.status.privacyStatus).toBe("public");
   });
 });
+
+describe("autopilot authorization", () => {
+  it("accepts a public authorization with a time and no user", () => {
+    const request = buildInsertRequest(live, item({ privacy: "public", public_authorized_by: null, public_authorized_at: "2026-11-08T10:00:00Z" }));
+    expect(request.requestBody.status.privacyStatus).toBe("public");
+  });
+
+  it("still refuses public without any authorization", () => {
+    expect(() => buildInsertRequest(live, item({ privacy: "public" }))).toThrow("public_not_authorized");
+  });
+});

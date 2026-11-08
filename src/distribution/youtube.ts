@@ -41,8 +41,9 @@ export class UploadRefusedError extends Error {
  * video with a date is sent as private plus publishAt, the only form YouTube accepts.
  */
 export function buildInsertRequest(config: PublicationConfig, item: QueueItem): InsertRequest {
-  const authorization = item.public_authorized_by && item.public_authorized_at
-    ? { authorizedBy: item.public_authorized_by, authorizedAt: item.public_authorized_at }
+  // An authorization from the autopilot has a time but no user behind it.
+  const authorization = item.public_authorized_at
+    ? { authorizedBy: item.public_authorized_by ?? "autopilot", authorizedAt: item.public_authorized_at }
     : null;
   const decision = decideUpload(config, { requestedPrivacy: item.privacy, scriptApproved: item.script_approved, publicAuthorization: authorization });
   if (!decision.allowed) throw new UploadRefusedError(decision.reason);
