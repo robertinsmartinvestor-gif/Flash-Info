@@ -95,4 +95,9 @@ describe("apiErrorCode", () => {
     expect(apiErrorCode("thumbnail_set_failed", Object.assign(new Error("token=secret"), { code: 403, errors: [{ reason: "forbidden" }] }))).toBe("thumbnail_set_failed:403:forbidden");
     expect(apiErrorCode("x", new Error("token=secret"))).toBe("x");
   });
+
+  it("reads the reason where googleapis puts it", () => {
+    const error = Object.assign(new Error("Request failed"), { status: 403, response: { data: { error: { errors: [{ reason: "forbidden", message: "secret" }] } } } });
+    expect(apiErrorCode("thumbnail_set_failed", error)).toBe("thumbnail_set_failed:403:forbidden");
+  });
 });
