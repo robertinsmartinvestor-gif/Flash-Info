@@ -6,15 +6,16 @@ pubblicata. Accuratezza e sicurezza vengono prima di velocità e metriche.
 ## Regole non negoziabili
 
 - Non modificare `main` direttamente: branch dedicato e pull request.
-- Non pubblicare video pubblici durante sviluppo e collaudo.
-- `PUBLICATION_MODE` resta `manual`. Non attivare `automatic`.
+- La pubblicazione pubblica è automatica per decisione del titolare (8 novembre 2026), con le
+  regole in `app_settings.autopilot`: tetto giornaliero, solo contenuti freschi, mai script
+  bloccati o con rilievi in `hold_checks`. Non allargare queste regole senza la sua richiesta.
 - Il privacy status inviato a YouTube viene solo da `decideUpload()`. L'API, se il
   campo manca, pubblica in pubblico: non ometterlo mai.
 - L'IA non genera fatti: lavora solo sulle evidenze fornite e cita fonti esistenti.
   Non rilassare i controlli QC per far passare un contenuto.
 - Il repository è pubblico, quindi lo sono log e artifact di GitHub Actions: niente
   segreti, token o bozze non approvate. Le anteprime vanno su Supabase Storage.
-- Non riattivare la schedulazione di `cron.yml`: la pianificazione è in n8n.
+- Non riattivare la schedulazione di `cron.yml` (legacy). La catena nuova gira da `autopilot.yml`.
 - Non toccare i workflow n8n di altri progetti né i dati di Lepefy.
 - Nessun servizio a pagamento, deploy di produzione o rotazione di segreti senza
   autorizzazione esplicita.

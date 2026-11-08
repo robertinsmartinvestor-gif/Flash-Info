@@ -29,10 +29,10 @@ interface PublicationState {
 type Production = Partial<Record<"tts" | "render", MediaState>> & { publication?: PublicationState };
 
 const PUBLICATION_LABEL: Record<string, string> = {
-  pending: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
+  pending: "In coda: il pilota automatico lo carica entro un'ora, oppure avvia Distribution con questo queue_id.",
   scheduled: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
   uploading: "Upload in corso. Se resta così a lungo, controlla YouTube Studio prima di riprovare.",
-  uploaded: "Caricato su YouTube come privato.",
+  uploaded: "Caricato su YouTube.",
   cancelled: "Pubblicazione annullata.",
 };
 
@@ -79,7 +79,7 @@ const MEDIA = {
 
 function jobLabel(name: string, job: NonNullable<MediaState["job"]>): string {
   if (job.status === "failed") return `${name} non riuscito: ${job.error_code ?? "errore"}.`;
-  if (job.status === "queued") return `${name} in coda: avvia il workflow Production su GitHub Actions.`;
+  if (job.status === "queued") return `${name} in coda: il pilota automatico lo produce entro un'ora.`;
   if (job.status === "running") return `${name} in produzione.`;
   if (job.status === "succeeded") return `${name} pronto.`;
   if (job.status === "cancelled") return `Produzione ${name.toLowerCase()} annullata.`;

@@ -1,6 +1,6 @@
 name: Distribution
 
-# Uploads one approved queue item. Manual or from n8n; never scheduled here.
+# Uploads one approved queue item by hand. The autopilot uploads on its own schedule.
 on:
   workflow_dispatch:
     inputs:
@@ -37,9 +37,10 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          # Fixed values, not repository variables: going public takes a reviewed
-          # change to this file on top of the approval recorded in the database.
-          PUBLICATION_MODE: manual
-          ALLOW_PUBLIC_PUBLICATION: "false"
-          OGNIORA_ENV: staging
+          # Fixed values, not repository variables: changing them takes a reviewed
+          # change to this file. Public still needs the authorization recorded in
+          # the queue (by an admin or by the autopilot rules).
+          PUBLICATION_MODE: automatic
+          ALLOW_PUBLIC_PUBLICATION: "true"
+          OGNIORA_ENV: production
         run: npm run job:distribute -- --queue-id "$QUEUE_ID"
