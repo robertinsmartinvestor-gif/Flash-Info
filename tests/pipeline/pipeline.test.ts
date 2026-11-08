@@ -107,12 +107,20 @@ describe("runCompose", () => {
     expect(store.versions.map((version) => version.report.verdict)).toEqual(["needs_review", "pass"]);
   });
 
-  it("stops after the second draft even if claims stay partly supported", async () => {
+  it("gives partly supported claims a third draft, then stops", async () => {
     const draft = validDraft();
     const partial = { results: [{ index: 1, verdict: "partial", reason: "generalizza" }] };
-    const { router, calls, store } = setupCompose([draft, partial, draft, partial]);
-    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "needs_review", version: 2 });
-    expect(calls).toHaveLength(4);
+    const { router, calls, store } = setupCompose([draft, partial, draft, partial, draft, partial]);
+    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "needs_review", version: 3 });
+    expect(calls).toHaveLength(6);
+  });
+
+  it("uses the third draft after a blocked one when only partial claims are left", async () => {
+    const draft = validDraft();
+    const partial = { results: [{ index: 1, verdict: "partial", reason: "generalizza" }] };
+    const { router, store } = setupCompose([invented(), draft, partial, draft, allSupported(draft)]);
+    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "pass", version: 3 });
+    expect(store.versions.map((version) => version.report.verdict)).toEqual(["blocked", "needs_review", "pass"]);
   });
 
   it("sends the script to review when the verifier fails, never to pass", async () => {

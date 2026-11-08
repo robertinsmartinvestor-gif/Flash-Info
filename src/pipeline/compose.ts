@@ -6,7 +6,11 @@ import { runQualityChecks, type QcReport } from "@/src/quality/checks";
 import { verifyClaims } from "@/src/quality/verifier";
 import type { EditorialStore } from "@/src/store/types";
 
+// A blocked script gets one corrected retry. A third draft is spent only to fix
+// claims the verifier found partly supported, the last obstacle before the
+// autopilot can approve a script.
 const MAX_DRAFTS = 2;
+const MAX_DRAFTS_FOR_PARTIAL_CLAIMS = 3;
 
 export interface ComposeResult {
   scriptId: string;
@@ -28,8 +32,9 @@ function feedbackFrom(report: QcReport): string[] {
 /**
  * Candidate to stored script versions. Every draft is saved, blocked ones too, so
  * the reasons stay readable. A blocked draft, or one with claims the verifier
- * found only partly supported, gets one corrected retry; if that fails as well
- * the script stays as it is for the editor, and spending stops.
+ * found only partly supported, gets one corrected retry; a draft whose only
+ * problem left is partly supported claims gets one more. Then the script stays as
+ * it is for the editor, and spending stops.
  */
 export async function runCompose(store: EditorialStore, router: AiRouter, candidateId: string, now = new Date()): Promise<ComposeResult> {
   const candidate = await store.getCandidate(candidateId);
@@ -47,7 +52,8 @@ export async function runCompose(store: EditorialStore, router: AiRouter, candid
     let report = runQualityChecks(draft, pack, format, now);
     // Spend on the semantic check only for drafts that passed the free ones.
     if (report.verdict !== "blocked") report = await verifyClaims(router, draft, pack, report);
-    const retry = report.findings.some(needsFix) && attempt < MAX_DRAFTS;
+    const blocked = report.findings.some((finding) => finding.severity === "blocker");
+    const retry = report.findings.some(needsFix) && attempt < (blocked ? MAX_DRAFTS : MAX_DRAFTS_FOR_PARTIAL_CLAIMS);
 
     const narration = draftNarration(draft);
     const saved = await store.saveScriptVersion({

@@ -66,7 +66,8 @@ Le regole stanno in `app_settings.autopilot` e si cambiano senza deploy:
 | `candidate_max_age_hours` | 8 | Età massima di un candidato |
 | `hold_checks` | verifier, verifier_unavailable, verifier_incomplete, sensitive_topic, sensational_language | Rilievi che fermano l'approvazione automatica |
 
-Uno script bloccato o con uno dei rilievi in `hold_checks` resta nello Studio: se lo approvi a
+Ogni script ha fino a tre bozze: la seconda corregge blocchi e affermazioni sostenute in parte, la terza
+solo le affermazioni sostenute in parte. Uno script bloccato o con uno dei rilievi in `hold_checks` resta nello Studio: se lo approvi a
 mano, il pilota lo produce e lo pubblica nel giro successivo. Ogni decisione automatica è in
 `audit_logs` con `actor_type = system`: `candidate.auto_selected`, `script.auto_approved`,
 `script.auto_held`, `publication.public_authorized` con `{"by": "autopilot"}`.
