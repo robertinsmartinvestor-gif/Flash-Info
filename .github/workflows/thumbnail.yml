@@ -1,0 +1,45 @@
+name: Thumbnail
+
+# Sets a cover by hand on a video already on YouTube, from a PNG in the private
+# Supabase bucket (folder thumbnail/). Visibility is never changed.
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: YouTube video id (11 characters)
+        required: true
+        type: string
+      storage_path:
+        description: PNG in the media bucket, e.g. thumbnail/manual/<video_id>.png
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thumbnail
+  cancel-in-progress: false
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # Inputs travel as environment variables, never into the shell text; the CLI checks both.
+      - name: Set thumbnail
+        env:
+          VIDEO_ID: ${{ inputs.video_id }}
+          STORAGE_PATH: ${{ inputs.storage_path }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: npm run -s job:thumbnail -- --video-id "$VIDEO_ID" --path "$STORAGE_PATH"
