@@ -77,6 +77,7 @@ Le regole stanno in `app_settings.autopilot` e si cambiano da **Studio → Impos
 | `enabled` | `true` | `false` ferma ogni passo |
 | `max_stories_per_day` | 3 | Nuove notizie scritte in 24 ore |
 | `min_gap_hours` | 3 | Distanza minima tra due notizie |
+| `publish_hours` | 07, 12, 18 | Ore (italiane) in cui il pilota sceglie una nuova notizia |
 | `max_age_hours` | 24 | Oltre, uno script non viene più prodotto né pubblicato |
 | `candidate_max_age_hours` | 8 | Età massima di un candidato |
 | `hold_checks` | verifier, verifier_unavailable, verifier_incomplete, sensitive_topic, sensational_language | Rilievi che fermano l'approvazione automatica |

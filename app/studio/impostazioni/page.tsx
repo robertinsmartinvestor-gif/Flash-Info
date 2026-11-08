@@ -212,7 +212,7 @@ export default function SettingsPage() {
                               disabled={!isAdmin || busy}
                               onClick={() => setDraft((all) => ({ ...all, [key]: on ? list.filter((item) => item !== option) : [...list, option] }))}
                             >
-                              {OPTION_LABEL[option] ?? option}
+                              {OPTION_LABEL[option] ?? (/^\d{2}$/.test(option) ? `${option}:00` : option)}
                             </button>
                           );
                         })}

@@ -52,6 +52,7 @@ beforeEach(async () => {
     delete from editorial_candidates; delete from news_events;
     set session_replication_role = origin;
     update app_settings set value = jsonb_set(value, '{enabled}', 'true') where key = 'autopilot';
+    update app_settings set value = value || jsonb_build_object('publish_hours', (select jsonb_agg(lpad(h::text, 2, '0')) from generate_series(0, 23) h)) where key = 'autopilot';
   `);
 });
 
@@ -150,5 +151,32 @@ describe("public_requires_authorization", () => {
     await addVideo(s.versionId);
     const { id } = await rpc("select autopilot_queue_public($1) as id", [s.versionId]);
     await expect(db.query("update publication_queue set public_authorized_policy = null where id = $1", [id])).rejects.toThrow("public_requires_authorization");
+  });
+});
+
+describe("publish hours", () => {
+  const romeHour = async () => (await one("select to_char(now() at time zone 'Europe/Rome', 'HH24') as h")).h as string;
+  const setHours = (hours: string[]) => db.query("update app_settings set value = value || jsonb_build_object('publish_hours', $1::jsonb) where key = 'autopilot'", [JSON.stringify(hours)]);
+
+  it("picks a new story only in the listed hours, Rome time", async () => {
+    await candidate();
+    const now = await romeHour();
+    const other = String((Number(now) + 1) % 24).padStart(2, "0");
+    await setHours([other]);
+    expect((await rpc("select autopilot_select_candidate() as id")).id).toBeNull();
+    await setHours([now]);
+    expect((await rpc("select autopilot_select_candidate() as id")).id).not.toBeNull();
+  });
+
+  it("picks nothing with no hour selected", async () => {
+    await candidate();
+    await setHours([]);
+    expect((await rpc("select autopilot_select_candidate() as id")).id).toBeNull();
+  });
+
+  it("is editable from the Studio within the allowed hours", async () => {
+    const field = await one("select options from setting_fields where key = 'autopilot' and field = 'publish_hours'");
+    expect(field.options).toContain("07");
+    expect(field.options).not.toContain("03");
   });
 });

@@ -20,6 +20,7 @@ interface Autopilot {
   enabled?: boolean;
   max_stories_per_day?: number;
   min_gap_hours?: number;
+  publish_hours?: string[];
 }
 
 interface Activity {
@@ -138,7 +139,10 @@ export default function OverviewPage() {
           <div className="card-head">
             <div>
               <h2>Pilota automatico</h2>
-              <p className="sub" style={{ margin: 0 }}>Dalle notizie al video pubblico, ogni ora dalle 6 alle 22.</p>
+              <p className="sub" style={{ margin: 0 }}>
+                Dalle notizie al video pubblico. Nuove notizie alle{" "}
+                {autopilot.publish_hours?.length ? [...autopilot.publish_hours].sort().map((hour) => `${hour}:00`).join(", ") : "– (nessuna ora scelta)"}.
+              </p>
             </div>
             <Switch checked={enabled} disabled={busy || role !== "admin"} onChange={toggleAutopilot} label="Pilota automatico" />
           </div>

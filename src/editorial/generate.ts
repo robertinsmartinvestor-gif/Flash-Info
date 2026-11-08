@@ -87,10 +87,27 @@ export async function generateDraft(
 }
 
 /** Source credits are built from what the script really cites, never from model output. */
+const BASE_HASHTAGS = ["#notizie", "#italia"];
+
+/** A tag as a hashtag: lowercase letters and digits only, accents dropped. Null when nothing usable is left. */
+export function toHashtag(tag: string): string | null {
+  const word = tag.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  return word.length >= 3 && word.length <= 30 ? `#${word}` : null;
+}
+
+/** Three hashtags: YouTube shows the first three above the title. Two fixed, one from the story's own tags. */
+export function hashtagsFor(tags: string[]): string[] {
+  const topic = tags.map(toHashtag).find((tag): tag is string => tag !== null && !BASE_HASHTAGS.includes(tag));
+  return topic ? [...BASE_HASHTAGS, topic] : BASE_HASHTAGS;
+}
+
 export function buildYoutubeMetadata(draft: ScriptDraft, pack: EvidenceItem[]): { title: string; description: string; tags: string[]; sources: Array<{ publisher: string; url: string }> } {
   const cited = new Set(draft.sentences.flatMap((sentence) => sentence.evidence.map((ref) => ref.evidenceId)));
   const sources = pack.filter((item) => cited.has(item.evidenceId)).map(({ publisher, url }) => ({ publisher, url }));
   const credits = sources.map((source) => `• ${source.publisher}: ${source.url}`).join("\n");
-  const description = `${draft.summary.trim()}\n\nFonti:\n${credits}\n\nVoce sintetica. Contenuto verificato dalla redazione di OgniOra.`;
-  return { title: draft.title.trim().slice(0, 100), description: description.slice(0, 5000), tags: draft.tags.slice(0, 8), sources };
+  const hashtags = `\n\n${hashtagsFor(draft.tags).join(" ")}`;
+  // The hashtags close the description, so the cap trims the body, never them.
+  const body = `${draft.summary.trim()}\n\nFonti:\n${credits}\n\nVoce sintetica. Contenuto verificato dalla redazione di OgniOra.`;
+  const description = body.slice(0, 5000 - hashtags.length) + hashtags;
+  return { title: draft.title.trim().slice(0, 100), description, tags: draft.tags.slice(0, 8), sources };
 }

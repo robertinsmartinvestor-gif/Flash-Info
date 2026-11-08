@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FORMATS } from "@/src/editorial/formats";
-import { buildYoutubeMetadata } from "@/src/editorial/generate";
+import { buildYoutubeMetadata, hashtagsFor, toHashtag } from "@/src/editorial/generate";
 import type { ScriptDraft, ScriptSentence } from "@/src/editorial/schema";
 import { runQualityChecks } from "@/src/quality/checks";
 import { NOW, PACK, validDraft } from "../helpers/fixtures";
@@ -198,5 +198,34 @@ describe("buildYoutubeMetadata", () => {
 
   it("states the synthetic voice", () => {
     expect(buildYoutubeMetadata(validDraft(), PACK).description).toContain("Voce sintetica");
+  });
+
+  it("ends the description with three hashtags, one from the story", () => {
+    const draft = validDraft();
+    draft.tags = ["Decreto bollette", "accise"];
+    expect(buildYoutubeMetadata(draft, PACK).description.endsWith("\n\n#notizie #italia #decretobollette")).toBe(true);
+  });
+
+  it("keeps the hashtags when the description hits the length cap", () => {
+    const draft = validDraft();
+    draft.summary = "x".repeat(6000);
+    draft.tags = ["gasolio"];
+    const { description } = buildYoutubeMetadata(draft, PACK);
+    expect(description.length).toBeLessThanOrEqual(5000);
+    expect(description.endsWith("#gasolio")).toBe(true);
+  });
+});
+
+describe("hashtags", () => {
+  it("turns tags into plain hashtags", () => {
+    expect(toHashtag("Città più vivibili")).toBe("#cittapiuvivibili");
+    expect(toHashtag("Ue")).toBeNull();
+    expect(toHashtag("#<script>")).toBe("#script");
+    expect(toHashtag("x".repeat(40))).toBeNull();
+  });
+
+  it("skips tags that repeat the fixed ones and falls back to the two fixed", () => {
+    expect(hashtagsFor(["Italia", "Meloni"])).toEqual(["#notizie", "#italia", "#meloni"]);
+    expect(hashtagsFor(["--", "Ue"])).toEqual(["#notizie", "#italia"]);
   });
 });
