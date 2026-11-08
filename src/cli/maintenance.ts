@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   const stuck = await db.from("publication_queue").select("id", { count: "exact", head: true }).eq("status", "uploading");
 
   console.log(`Job riaccodati: ${stale.data}. Asset eliminati: ${assets.length}. Retention: ${JSON.stringify(retention.data)}.`);
-  console.log(`Spesa stimata del mese: $${Number(spend.data).toFixed(2)} su $${monthlyBudgetUsd()}. Upload da controllare: ${stuck.count ?? 0}.`);
+  console.log(`Spesa stimata del mese: $${Number(spend.data).toFixed(2)} su $${await monthlyBudgetUsd()}. Upload da controllare: ${stuck.count ?? 0}.`);
 }
 
 main().catch(failJob);

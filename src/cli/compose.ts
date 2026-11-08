@@ -11,7 +11,7 @@ async function main(): Promise<void> {
     config: loadAiConfig(),
     pricing: loadPricing(),
     ledger: store,
-    monthlyBudgetUsd: monthlyBudgetUsd(),
+    monthlyBudgetUsd: await monthlyBudgetUsd(),
   });
   const result = await runCompose(store, router, candidateId);
   console.log(`Script ${result.scriptId} v${result.version}: ${result.verdict}, ${result.findings} rilievi.`);

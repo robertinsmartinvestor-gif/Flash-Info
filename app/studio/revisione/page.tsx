@@ -2,15 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { buildReviewItems, canApprove, canReject, type ReviewItem, safeHttpsUrl } from "@/src/editorial/review";
-import { button, field, small, useStudio } from "../shared";
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Bozza",
-  in_review: "Da rivedere",
-  blocked: "Bloccato dal QC",
-  approved: "Approvato",
-  rejected: "Respinto",
-};
+import { formatWhen, useStudio } from "../shared";
+import { Badge, PageHead, PRIVACY, PUBLICATION_STATUS, SCRIPT_STATUS, StatusLine, YOUTUBE_ID } from "../ui";
 
 const VERSION_FIELDS = "id, script_id, version, content, narration, estimated_seconds, evidence, qc_verdict, qc_report, created_at";
 
@@ -22,76 +15,64 @@ interface MediaState {
 interface PublicationState {
   id: string;
   status: string;
+  privacy: string;
   last_error: string | null;
   youtubeId?: string;
 }
 
 type Production = Partial<Record<"tts" | "render", MediaState>> & { publication?: PublicationState };
 
-const PUBLICATION_LABEL: Record<string, string> = {
-  pending: "In coda: il pilota automatico lo carica entro un'ora, oppure avvia Distribution con questo queue_id.",
-  scheduled: "In coda come video privato: avvia il workflow Distribution con questo queue_id.",
-  uploading: "Upload in corso. Se resta così a lungo, controlla YouTube Studio prima di riprovare.",
-  uploaded: "Caricato su YouTube.",
-  cancelled: "Pubblicazione annullata.",
-};
+const FILTERS = [
+  { id: "todo", label: "Da rivedere", match: (item: ReviewItem) => item.status === "in_review" || item.status === "draft" },
+  { id: "approved", label: "Approvati", match: (item: ReviewItem) => item.status === "approved" },
+  { id: "blocked", label: "Bloccati", match: (item: ReviewItem) => item.status === "blocked" },
+  { id: "all", label: "Tutti", match: () => true },
+] as const;
 
-const YOUTUBE_ID = /^[\w-]{11}$/;
-
-function Publication({ item, publication, onDone }: { item: ReviewItem; publication?: PublicationState; onDone: (message: string) => void }) {
-  const { client } = useStudio();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function enqueue() {
-    setBusy(true);
-    setError("");
-    const { error: failed } = await client.rpc("queue_publication", { p_version_id: item.versionId });
-    setBusy(false);
-    if (failed) setError("Video non messo in coda.");
-    else onDone("Video in coda per YouTube, come privato.");
-  }
-
-  const youtubeId = publication?.youtubeId && YOUTUBE_ID.test(publication.youtubeId) ? publication.youtubeId : null;
-  return (
-    <div style={{ marginTop: 16 }}>
-      {!publication && <button type="button" disabled={busy} onClick={enqueue} style={button}>Metti in coda per YouTube (privato)</button>}
-      {publication && (
-        <p style={small}>
-          {publication.status === "failed" ? `Upload non riuscito: ${publication.last_error ?? "errore"}. Si può rilanciare il workflow.` : PUBLICATION_LABEL[publication.status] ?? publication.status}
-        </p>
-      )}
-      {publication && !youtubeId && <p style={small}>queue_id: <code>{publication.id}</code></p>}
-      {youtubeId && (
-        <p style={small}>
-          <a href={`https://studio.youtube.com/video/${youtubeId}/edit`} target="_blank" rel="noopener noreferrer">Apri in YouTube Studio</a>
-        </p>
-      )}
-      <p role="status" style={small}>{error}</p>
-    </div>
-  );
-}
+type FilterId = (typeof FILTERS)[number]["id"];
 
 const MEDIA = {
   tts: { name: "Audio", action: "Genera audio" },
   render: { name: "Video", action: "Genera video" },
 };
 
-function jobLabel(name: string, job: NonNullable<MediaState["job"]>): string {
-  if (job.status === "failed") return `${name} non riuscito: ${job.error_code ?? "errore"}.`;
-  if (job.status === "queued") return `${name} in coda: il pilota automatico lo produce entro un'ora.`;
-  if (job.status === "running") return `${name} in produzione.`;
-  if (job.status === "succeeded") return `${name} pronto.`;
-  if (job.status === "cancelled") return `Produzione ${name.toLowerCase()} annullata.`;
+type StepState = "done" | "active" | "failed" | "todo";
+
+function jobState(media?: MediaState): StepState {
+  if (media?.path) return "done";
+  if (media?.job?.status === "failed") return "failed";
+  if (media?.job) return "active";
+  return "todo";
+}
+
+function jobLabel(name: string, media: MediaState): string {
+  const job = media.job;
+  if (media.path) return `${name} pronto.`;
+  if (!job) return `${name} non ancora richiesto.`;
+  if (job.status === "failed") return `Non riuscito: ${job.error_code ?? "errore"}.`;
+  if (job.status === "queued") return "In coda: il pilota lo produce al prossimo giro.";
+  if (job.status === "running") return "In produzione.";
+  if (job.status === "cancelled") return "Annullato.";
   return job.status;
 }
 
-function Media({ item, kind, media, onDone }: { item: ReviewItem; kind: "tts" | "render"; media: MediaState; onDone: (message: string) => void }) {
+function Step({ index, title, state, children }: { index: number; title: string; state: StepState; children: React.ReactNode }) {
+  return (
+    <div className={`step ${state}`}>
+      <span className="dot" aria-hidden="true">{state === "done" ? "✓" : state === "failed" ? "!" : index}</span>
+      <div>
+        <div className="name">{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MediaStep({ index, item, kind, media, onDone }: { index: number; item: ReviewItem; kind: "tts" | "render"; media: MediaState; onDone: (message: string) => void }) {
   const { client } = useStudio();
   const [src, setSrc] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
   const { name, action } = MEDIA[kind];
 
   useEffect(() => {
@@ -107,19 +88,61 @@ function Media({ item, kind, media, onDone }: { item: ReviewItem; kind: "tts" | 
     setError("");
     const { error: failed } = await client.rpc("enqueue_production_job", { p_version_id: item.versionId, p_kind: kind });
     setBusy(false);
-    if (failed) setError(`Job ${name.toLowerCase()} non creato.`);
-    else onDone(`Job ${name.toLowerCase()} in coda.`);
+    if (failed) setError(`${name} non messo in coda.`);
+    else onDone(`${name} in coda.`);
   }
 
-  const { job } = media;
   return (
-    <div style={{ marginTop: 16 }}>
-      {!job && <button type="button" disabled={busy} onClick={enqueue} style={button}>{action}</button>}
-      {job && <p style={small}>{jobLabel(name, job)}</p>}
-      {src && kind === "tts" && <audio controls src={src} style={{ width: "100%" }} />}
-      {src && kind === "render" && <video controls src={src} style={{ width: "100%", maxWidth: 320, display: "block" }} />}
-      <p role="status" style={small}>{error}</p>
-    </div>
+    <Step index={index} title={name} state={jobState(media)}>
+      <div className="faint">{jobLabel(name, media)}</div>
+      {!media.job && !media.path && <button type="button" className="btn small" disabled={busy} onClick={enqueue} style={{ marginTop: 8 }}>{action}</button>}
+      {src && kind === "tts" && <audio controls src={src} />}
+      {src && kind === "render" && <video controls src={src} />}
+      {error && <div className="finding blocker">{error}</div>}
+    </Step>
+  );
+}
+
+function PublicationStep({ item, publication, ready, onDone }: { item: ReviewItem; publication?: PublicationState; ready: boolean; onDone: (message: string) => void }) {
+  const { client } = useStudio();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function enqueue() {
+    setBusy(true);
+    setError("");
+    const { error: failed } = await client.rpc("queue_publication", { p_version_id: item.versionId });
+    setBusy(false);
+    if (failed) setError("Video non messo in coda.");
+    else onDone("Video in coda per YouTube, come privato.");
+  }
+
+  const youtubeId = publication?.youtubeId && YOUTUBE_ID.test(publication.youtubeId) ? publication.youtubeId : null;
+  const state: StepState = youtubeId ? "done" : publication?.status === "failed" ? "failed" : publication ? "active" : "todo";
+  const status = publication ? PUBLICATION_STATUS[publication.status] : null;
+  const privacy = publication ? PRIVACY[publication.privacy] : null;
+
+  return (
+    <Step index={3} title="YouTube" state={state}>
+      {publication ? (
+        <div className="actions" style={{ marginTop: 4 }}>
+          <Badge tone={status?.tone}>{status?.label ?? publication.status}</Badge>
+          <Badge tone={privacy?.tone}>{privacy?.label ?? publication.privacy}</Badge>
+        </div>
+      ) : (
+        <div className="faint">{ready ? "Il pilota lo pubblica al prossimo giro se lo script è recente." : "Serve prima il video."}</div>
+      )}
+      {publication?.status === "failed" && <div className="finding blocker">{publication.last_error ?? "Errore"}: controlla YouTube Studio, poi rilancia Distribution.</div>}
+      {youtubeId && (
+        <div className="faint" style={{ marginTop: 6 }}>
+          <a href={`https://www.youtube.com/watch?v=${youtubeId}`} target="_blank" rel="noopener noreferrer">Guarda</a>
+          {" · "}
+          <a href={`https://studio.youtube.com/video/${youtubeId}/edit`} target="_blank" rel="noopener noreferrer">YouTube Studio</a>
+        </div>
+      )}
+      {!publication && ready && <button type="button" className="btn ghost small" disabled={busy} onClick={enqueue} style={{ marginTop: 8 }}>Metti in coda come privato</button>}
+      {error && <div className="finding blocker">{error}</div>}
+    </Step>
   );
 }
 
@@ -138,34 +161,37 @@ function Detail({ item, production, onDone }: { item: ReviewItem; production: Pr
       : await client.rpc("reject_script", { p_script_id: item.scriptId, p_reason: text });
     setBusy(false);
     if (failed) setError("Operazione non riuscita.");
-    else onDone(action === "approve" ? "Script approvato." : "Script respinto.");
+    else onDone(action === "approve" ? "Script approvato: il pilota lo produce e lo pubblica al prossimo giro." : "Script respinto.");
   }
 
   const sources = new Map(item.evidence.map((source) => [source.evidenceId, source]));
   const generalFindings = item.findings.filter((finding) => finding.sentence === undefined);
+  const status = SCRIPT_STATUS[item.status];
 
   return (
-    <div style={{ padding: "12px 0 20px" }}>
-      {item.draft && <p style={{ fontSize: 14, marginTop: 0 }}>{item.draft.summary}</p>}
-      <p style={small}>Versione {item.version}, circa {Math.round(item.estimatedSeconds)} secondi, formato {item.format}.</p>
+    <section className="card detail">
+      <div className="actions" style={{ marginBottom: 10 }}>
+        <Badge tone={status?.tone}>{status?.label ?? item.status}</Badge>
+        <span className="faint">v{item.version} · circa {Math.round(item.estimatedSeconds)} s · {formatWhen(item.createdAt)}</span>
+      </div>
+      <h2>{item.draft?.title ?? "Script senza titolo"}</h2>
+      {item.draft && <p className="muted" style={{ marginTop: 0 }}>{item.draft.summary}</p>}
 
-      {generalFindings.map((finding, index) => (
-        <p key={index} style={{ ...small, color: finding.severity === "blocker" ? "#b42318" : "#8a5a00" }}>{finding.message}</p>
-      ))}
+      {generalFindings.map((finding, index) => <div key={index} className={`finding ${finding.severity}`}>{finding.message}</div>)}
 
       {item.draft ? (
-        <ol style={{ paddingLeft: 20, fontSize: 14, lineHeight: 1.5 }}>
+        <ol className="sentences">
           {item.draft.sentences.map((sentence, index) => (
-            <li key={index} style={{ marginBottom: 12 }}>
+            <li key={index}>
               {sentence.text}
               {item.findings.filter((finding) => finding.sentence === index).map((finding, position) => (
-                <div key={position} style={{ ...small, color: finding.severity === "blocker" ? "#b42318" : "#8a5a00" }}>{finding.message}</div>
+                <div key={position} className={`finding ${finding.severity}`}>{finding.message}</div>
               ))}
               {sentence.evidence.map((reference, position) => {
                 const source = sources.get(reference.evidenceId);
                 const url = safeHttpsUrl(source?.url);
                 return (
-                  <div key={position} style={small}>
+                  <div key={position} className="src">
                     {url ? <a href={url} target="_blank" rel="noopener noreferrer">{source?.publisher}</a> : (source?.publisher ?? "Fonte non trovata")}: «{reference.quote}»
                   </div>
                 );
@@ -174,31 +200,38 @@ function Detail({ item, production, onDone }: { item: ReviewItem; production: Pr
           ))}
         </ol>
       ) : (
-        <p style={{ fontSize: 14, lineHeight: 1.5 }}>{item.narration}</p>
+        <p style={{ lineHeight: 1.6 }}>{item.narration}</p>
       )}
 
       {(canApprove(item) || canReject(item)) && (
-        <>
-          <label htmlFor={`note-${item.scriptId}`} style={small}>Nota: facoltativa per approvare, obbligatoria per respingere</label>
-          <textarea id={`note-${item.scriptId}`} rows={2} value={note} onChange={(e) => setNote(e.target.value)} style={field} />
-          <div style={{ display: "flex", gap: 8 }}>
-            {canApprove(item) && <button type="button" disabled={busy} onClick={() => decide("approve")} style={button}>Approva</button>}
-            {canReject(item) && <button type="button" disabled={busy || !note.trim()} onClick={() => decide("reject")} style={{ ...button, background: "#fff", color: "#b42318", border: "1px solid #b42318", opacity: busy || !note.trim() ? 0.5 : 1 }}>Respingi</button>}
+        <div className="field" style={{ marginTop: 8 }}>
+          <label htmlFor={`note-${item.scriptId}`}>Nota</label>
+          <textarea id={`note-${item.scriptId}`} className="textarea" rows={2} value={note} placeholder="Facoltativa per approvare, obbligatoria per respingere" onChange={(e) => setNote(e.target.value)} />
+          <div className="actions">
+            {canApprove(item) && <button type="button" className="btn primary" disabled={busy} onClick={() => decide("approve")}>Approva</button>}
+            {canReject(item) && <button type="button" className="btn danger" disabled={busy || !note.trim()} onClick={() => decide("reject")}>Respingi</button>}
           </div>
-        </>
+          {canApprove(item) && <p className="help">Approvare rende lo script pubblicabile: il pilota automatico lo produce e lo carica su YouTube al prossimo giro.</p>}
+        </div>
       )}
-      <p role="status" style={small}>{error}</p>
-      {item.status === "approved" && <Media item={item} kind="tts" media={production.tts ?? {}} onDone={onDone} />}
-      {item.status === "approved" && production.tts?.path && <Media item={item} kind="render" media={production.render ?? {}} onDone={onDone} />}
-      {item.status === "approved" && production.render?.path && <Publication item={item} publication={production.publication} onDone={onDone} />}
-    </div>
+      {error && <div className="finding blocker">{error}</div>}
+
+      {item.status === "approved" && (
+        <div className="steps">
+          <MediaStep index={1} item={item} kind="tts" media={production.tts ?? {}} onDone={onDone} />
+          {production.tts?.path && <MediaStep index={2} item={item} kind="render" media={production.render ?? {}} onDone={onDone} />}
+          <PublicationStep item={item} publication={production.publication} ready={Boolean(production.render?.path)} onDone={onDone} />
+        </div>
+      )}
+    </section>
   );
 }
 
 export default function ReviewPage() {
-  const { client } = useStudio();
+  const { client, refreshCounts } = useStudio();
   const [items, setItems] = useState<ReviewItem[] | null>(null);
   const [production, setProduction] = useState<Record<string, Production>>({});
+  const [filter, setFilter] = useState<FilterId>("todo");
   const [open, setOpen] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
@@ -208,7 +241,7 @@ export default function ReviewPage() {
       client.from("script_versions").select(VERSION_FIELDS).order("created_at", { ascending: false }).limit(200),
       client.from("production_jobs").select("script_version_id, kind, status, error_code").in("kind", ["tts", "render"]).limit(200),
       client.from("media_assets").select("script_version_id, kind, storage_path").in("kind", ["audio", "video"]).is("deleted_at", null).order("created_at").limit(200),
-      client.from("publication_queue").select("id, script_version_id, status, last_error").limit(200),
+      client.from("publication_queue").select("id, script_version_id, status, privacy, last_error").limit(200),
       client.from("youtube_publications").select("queue_id, youtube_video_id").limit(200),
     ]);
     if (scripts.error || versions.error || jobs.error || assets.error || queue.error || uploads.error) {
@@ -228,7 +261,10 @@ export default function ReviewPage() {
     }
     const videoIds = new Map(uploads.data.map((upload) => [upload.queue_id as string, upload.youtube_video_id as string]));
     for (const row of queue.data) {
-      next[row.script_version_id] = { ...next[row.script_version_id], publication: { id: row.id, status: row.status, last_error: row.last_error, youtubeId: videoIds.get(row.id) } };
+      next[row.script_version_id] = {
+        ...next[row.script_version_id],
+        publication: { id: row.id, status: row.status, privacy: row.privacy, last_error: row.last_error, youtubeId: videoIds.get(row.id) },
+      };
     }
     setProduction(next);
     setItems(buildReviewItems(scripts.data, versions.data));
@@ -238,39 +274,58 @@ export default function ReviewPage() {
     void load();
   }, [load]);
 
-  if (!items) return <p style={small}>Caricamento…</p>;
+  const active = FILTERS.find((item) => item.id === filter) ?? FILTERS[0];
+  const visible = (items ?? []).filter(active.match);
+  const selected = visible.find((item) => item.scriptId === open) ?? visible[0] ?? null;
 
   return (
     <>
-      <p style={small}>Approvare non pubblica nulla: rende lo script utilizzabile per la produzione.</p>
-      {items.length === 0 && !message && <p style={small}>Nessuno script.</p>}
-      {items.map((item) => (
-        <section key={item.scriptId} style={{ borderTop: "1px solid #e5e5e5" }}>
-          <button
-            type="button"
-            aria-expanded={open === item.scriptId}
-            onClick={() => setOpen(open === item.scriptId ? null : item.scriptId)}
-            style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "12px 0", cursor: "pointer", fontSize: 14 }}
-          >
-            <strong>{item.draft?.title ?? "Script senza titolo"}</strong>
-            <span style={{ ...small, display: "block" }}>
-              {STATUS_LABEL[item.status] ?? item.status}, {item.findings.length} {item.findings.length === 1 ? "avviso" : "avvisi"}
-            </span>
+      <PageHead title="Revisione" subtitle="Gli script che il pilota non ha potuto approvare da solo, e la loro produzione.">
+        <button type="button" className="btn ghost small" onClick={() => void load()}>Aggiorna</button>
+      </PageHead>
+
+      <div className="filters" role="group" aria-label="Filtro">
+        {FILTERS.map((item) => (
+          <button key={item.id} type="button" className="chip" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+            {item.label}{items && ` · ${items.filter(item.match).length}`}
           </button>
-          {open === item.scriptId && (
-            <Detail
-              key={item.versionId + item.status}
-              item={item}
-              production={production[item.versionId] ?? {}}
-              onDone={(text) => {
-                setMessage(text);
-                void load();
-              }}
-            />
-          )}
-        </section>
-      ))}
-      <p role="status" style={{ ...small, marginTop: 16 }}>{message}</p>
+        ))}
+      </div>
+
+      {!items && <p className="empty">Caricamento…</p>}
+      {items && visible.length === 0 && <section className="card"><p className="empty">Niente qui.</p></section>}
+
+      {selected && (
+        <div className="review">
+          <div className="queue">
+            {visible.map((item) => {
+              const status = SCRIPT_STATUS[item.status];
+              const blockers = item.findings.filter((finding) => finding.severity === "blocker").length;
+              return (
+                <button key={item.scriptId} type="button" aria-current={item.scriptId === selected.scriptId} onClick={() => setOpen(item.scriptId)}>
+                  <span className="q-title">{item.draft?.title ?? "Script senza titolo"}</span>
+                  <span className="q-meta">
+                    <Badge tone={status?.tone}>{status?.label ?? item.status}</Badge>
+                    {item.findings.length > 0 && <span>{item.findings.length} {item.findings.length === 1 ? "rilievo" : "rilievi"}{blockers ? `, ${blockers} bloccanti` : ""}</span>}
+                    <span>{formatWhen(item.createdAt)}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <Detail
+            key={selected.versionId + selected.status}
+            item={selected}
+            production={production[selected.versionId] ?? {}}
+            onDone={(text) => {
+              setMessage(text);
+              refreshCounts();
+              void load();
+            }}
+          />
+        </div>
+      )}
+      <StatusLine message={message} />
     </>
   );
 }

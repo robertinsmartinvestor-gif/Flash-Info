@@ -41,6 +41,23 @@ Il workflow 3 è l'unico che legge Supabase, con la service role, che dà pieno 
 Variabili d'ambiente: `OGNIORA_SUPABASE_URL`, `OGNIORA_NOTIFY_WEBHOOK`.
 
 
+## Studio
+
+`/studio` ha quattro pagine:
+
+- **Panoramica:** interruttore del pilota, spesa del mese sul tetto, numeri della pipeline, ultimi video e attività.
+- **Revisione:** script da rivedere, approvati e bloccati, con i passi audio → video → YouTube.
+- **Pubblicazioni:** ogni voce della coda YouTube, con stato e visibilità.
+- **Impostazioni:** regole del pilota, spesa, produzione, conservazione e voce. Solo gli admin modificano.
+
+Le impostazioni sono descritte nella tabella `setting_fields` (tipo, limiti, etichetta, sezione) e si
+salvano con `update_setting`, che controlla ogni valore e registra la modifica in `audit_logs`. Per
+aggiungerne una basta una migrazione che inserisce la riga in `setting_fields` e il valore iniziale in
+`app_settings`: la pagina la mostra senza altro codice.
+
+Il tetto di spesa mensile è `app_settings.budget.monthly_usd`, letto dai job a ogni avvio. La variabile
+`AI_MONTHLY_BUDGET_USD` resta solo come riserva se il valore manca.
+
 ## Pilota automatico
 
 `autopilot.yml` parte ogni ora dalle 6 alle 22 da n8n (workflow *OgniOra - Pilota automatico*),
@@ -53,7 +70,7 @@ che è puntuale. Il cron di GitHub, spesso in ritardo, resta solo come riserva o
    anche quelli approvati a mano nello Studio;
 5. carica su YouTube come **pubblico** le voci autorizzate.
 
-Le regole stanno in `app_settings.autopilot` e si cambiano senza deploy:
+Le regole stanno in `app_settings.autopilot` e si cambiano da **Studio → Impostazioni**, senza deploy:
 
 | Campo | Valore iniziale | Effetto |
 | --- | --- | --- |
@@ -79,7 +96,7 @@ update app_settings set value = jsonb_set(value, '{enabled}', 'false') where key
 Per togliere un video già pubblicato: YouTube Studio.
 
 Costi: con 3 notizie al giorno circa 0,12 USD l'una (script e voce), quindi circa 11 USD al mese,
-sotto il tetto di `AI_MONTHLY_BUDGET_USD`. Un upload consuma 1.600 delle 10.000 unità giornaliere
+sotto il tetto di spesa impostato nello Studio. Un upload consuma 1.600 delle 10.000 unità giornaliere
 della YouTube Data API.
 
 ## Pubblicazione

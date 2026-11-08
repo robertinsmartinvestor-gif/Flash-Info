@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   const outcomes = await runTtsJobs({
     store: new SupabaseProductionStore(db),
     synthesizers: synthesizersFromEnv(),
-    monthlyBudgetUsd: monthlyBudgetUsd(),
+    monthlyBudgetUsd: await monthlyBudgetUsd(),
     runnerId: `actions-${vars.GITHUB_RUN_ID}`,
   });
   // Public log: ids and codes only, never the narration or a signed URL.

@@ -23,7 +23,7 @@ async function main(): Promise<void> {
       config: loadAiConfig(),
       pricing: loadPricing(),
       ledger: editorial,
-      monthlyBudgetUsd: monthlyBudgetUsd(),
+      monthlyBudgetUsd: await monthlyBudgetUsd(),
     });
     const report = await runEditorialStep(store, async (candidateId) => {
       const result = await runCompose(editorial, router, candidateId);
