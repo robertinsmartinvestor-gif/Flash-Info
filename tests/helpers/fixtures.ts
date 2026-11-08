@@ -68,5 +68,22 @@ export function validDraft(): ScriptDraft {
       ...padding,
       { text: "Seguiremo gli sviluppi della vicenda.", kind: "connective", evidence: [] },
     ],
+    cover: {
+      headline: "Il governo impugna la legge del Veneto",
+      qualifier: "",
+      subline: "La legge era stata approvata 3 mesi fa",
+      visual: "politica",
+      evidence: [
+        { evidenceId: "E2", quote: "Il governo impugna la legge del Veneto sul fine vita" },
+        { evidenceId: "E2", quote: "La legge era stata approvata 3 mesi fa" },
+      ],
+    },
   };
+}
+
+/** The same draft as a version saved before covers existed. */
+export function withoutCover(): ScriptDraft {
+  const draft = validDraft();
+  delete draft.cover;
+  return draft;
 }

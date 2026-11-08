@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadPublicationConfig } from "@/src/core/publication-policy";
-import { buildInsertRequest, UploadRefusedError, type QueueItem } from "@/src/distribution/youtube";
+import { apiErrorCode, buildInsertRequest, finalVisibility, UploadRefusedError, type QueueItem } from "@/src/distribution/youtube";
+
+const NOW = new Date("2026-11-08T07:00:00Z");
 
 const safe = loadPublicationConfig({});
 const live = loadPublicationConfig({ ALLOW_PUBLIC_PUBLICATION: "true", OGNIORA_ENV: "production", PUBLICATION_MODE: "assisted" });
@@ -40,7 +42,7 @@ describe("buildInsertRequest", () => {
   });
 
   it("schedules authorized public videos as private plus publishAt", () => {
-    const status = buildInsertRequest(live, item({ ...authorized, publish_at: "2026-12-01T10:00:00Z" })).requestBody.status;
+    const status = buildInsertRequest(live, item({ ...authorized, publish_at: "2026-12-01T10:00:00Z" }), NOW).requestBody.status;
     expect(status).toMatchObject({ privacyStatus: "private", publishAt: "2026-12-01T10:00:00Z" });
   });
 
@@ -57,5 +59,40 @@ describe("autopilot authorization", () => {
 
   it("still refuses public without any authorization", () => {
     expect(() => buildInsertRequest(live, item({ privacy: "public" }))).toThrow("public_not_authorized");
+  });
+});
+
+describe("items with a cover", () => {
+  const withCover = { thumbnail_asset_id: "t", thumbnail_path: "thumbnail/v/cover-v1.png" };
+
+  it("are always inserted private, with no schedule and no notification", () => {
+    const request = buildInsertRequest(live, item({ ...authorized, ...withCover, publish_at: "2026-12-01T10:00:00Z" }), NOW);
+    expect(request.requestBody.status).toEqual({ privacyStatus: "private", selfDeclaredMadeForKids: false, containsSyntheticMedia: true });
+    expect(request.notifySubscribers).toBe(false);
+  });
+
+  it("are still refused at insert time when the policy refuses them", () => {
+    expect(() => buildInsertRequest(safe, item({ ...authorized, ...withCover }), NOW)).toThrow("public_disabled");
+    expect(() => buildInsertRequest(live, item({ ...withCover, script_approved: false }), NOW)).toThrow("script_not_approved");
+  });
+});
+
+describe("finalVisibility", () => {
+  it("comes from decideUpload: public only when authorized and enabled", () => {
+    expect(finalVisibility(live, item(authorized), NOW).privacyStatus).toBe("public");
+    expect(finalVisibility(live, item(), NOW).privacyStatus).toBe("private");
+    expect(() => finalVisibility(live, item({ privacy: "public" }), NOW)).toThrow("public_not_authorized");
+  });
+
+  it("never publishes before publishAt, and does not schedule in the past", () => {
+    expect(finalVisibility(live, item({ ...authorized, publish_at: "2026-11-08T12:00:00Z" }), NOW)).toMatchObject({ privacyStatus: "private", publishAt: "2026-11-08T12:00:00Z" });
+    expect(finalVisibility(live, item({ ...authorized, publish_at: "2026-11-08T06:00:00Z" }), NOW)).toEqual({ privacyStatus: "public", selfDeclaredMadeForKids: false, containsSyntheticMedia: true });
+  });
+});
+
+describe("apiErrorCode", () => {
+  it("keeps only the status and Google's reason, never the message", () => {
+    expect(apiErrorCode("thumbnail_set_failed", Object.assign(new Error("token=secret"), { code: 403, errors: [{ reason: "forbidden" }] }))).toBe("thumbnail_set_failed:403:forbidden");
+    expect(apiErrorCode("x", new Error("token=secret"))).toBe("x");
   });
 });

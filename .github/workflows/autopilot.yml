@@ -79,8 +79,9 @@ jobs:
         continue-on-error: true
         run: npm run job:autopilot -- --step advance
 
-      # The ids are UUIDs checked by the CLI, and travel through a file, never
-      # into the shell text unquoted.
+      # New public uploads and items already on YouTube still waiting for their
+      # cover or visibility. The ids are UUIDs checked by the CLI, and travel
+      # through a file, never into the shell text unquoted.
       - name: Upload
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}

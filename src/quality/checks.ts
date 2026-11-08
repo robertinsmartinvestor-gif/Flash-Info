@@ -1,4 +1,4 @@
-import { foldText } from "@/src/core/text";
+import { foldText, wordCount } from "@/src/core/text";
 import type { FormatConfig } from "@/src/editorial/formats";
 import { draftNarration, estimateSeconds } from "@/src/editorial/generate";
 import type { EvidenceItem, ScriptDraft, ScriptSentence } from "@/src/editorial/schema";
@@ -210,6 +210,45 @@ function checkDuration(seconds: number, format: FormatConfig): QcFinding[] {
   }];
 }
 
+const COVER_HEADLINE_WORDS = { min: 3, max: 7 } as const;
+const MAX_COVER_HEADLINE_CHARS = 40;
+const MAX_COVER_SUBLINE_CHARS = 50;
+
+/** The text a cover shows as claims, for the source checks and the verifier. */
+export function coverClaim(draft: ScriptDraft): string | null {
+  if (!draft.cover) return null;
+  return [draft.cover.headline, draft.cover.subline].map((text) => text.trim()).filter(Boolean).join(". ");
+}
+
+/**
+ * The cover is read before the video, so it obeys the same rules as a fact
+ * sentence (cited, quoted verbatim, no number or name the sources lack) plus its
+ * own limits of length and tone. Versions saved before covers existed have none:
+ * their cover falls back to the title, which checkMetadata and checkTone cover.
+ */
+function checkCover(draft: ScriptDraft, byId: Map<string, EvidenceItem>, now: Date): QcFinding[] {
+  const cover = draft.cover;
+  const claim = coverClaim(draft);
+  if (!cover || claim === null) return [];
+  const findings: QcFinding[] = [];
+  const add = (check: string, message: string) => findings.push({ check, severity: "blocker", message: `Copertina: ${message}` });
+
+  const words = wordCount(cover.headline);
+  if (words < COVER_HEADLINE_WORDS.min || words > COVER_HEADLINE_WORDS.max || cover.headline.trim().length > MAX_COVER_HEADLINE_CHARS) {
+    add("cover_headline", `il titolo deve avere da ${COVER_HEADLINE_WORDS.min} a ${COVER_HEADLINE_WORDS.max} parole e al massimo ${MAX_COVER_HEADLINE_CHARS} caratteri.`);
+  }
+  if (cover.subline.trim().length > MAX_COVER_SUBLINE_CHARS) {
+    add("cover_subline", `la riga secondaria supera ${MAX_COVER_SUBLINE_CHARS} caratteri.`);
+  }
+  if (/[!?]|\p{Extended_Pictographic}/u.test(claim) || SENSATIONAL.some((word) => foldText(claim).includes(word))) {
+    add("cover_tone", "punti esclamativi, domande, emoji o linguaggio sensazionalistico.");
+  }
+  for (const finding of checkSentence({ text: claim, kind: "fact", evidence: cover.evidence }, -1, byId, now)) {
+    findings.push({ check: finding.check, severity: finding.severity, message: `Copertina: ${finding.message}` });
+  }
+  return findings;
+}
+
 function checkSensitive(draft: ScriptDraft): QcFinding[] {
   const text = foldText(draftNarration(draft));
   return SENSITIVE.some((word) => text.includes(word))
@@ -219,7 +258,7 @@ function checkSensitive(draft: ScriptDraft): QcFinding[] {
 
 const CHECKS_RUN = [
   "sources", "quotes_verbatim", "numbers_supported", "names_supported", "temporal_coherence",
-  "repetition", "tone", "style", "duration", "attribution", "sensitive_topic", "metadata",
+  "repetition", "tone", "style", "duration", "attribution", "sensitive_topic", "metadata", "cover",
 ];
 
 /**
@@ -238,6 +277,7 @@ export function runQualityChecks(draft: ScriptDraft, pack: EvidenceItem[], forma
     ...checkStyle(draft),
     ...checkDuration(estimatedSeconds, format),
     ...checkSensitive(draft),
+    ...checkCover(draft, byId, now),
   ];
   return { verdict: verdictOf(findings), findings, checksRun: CHECKS_RUN, estimatedSeconds };
 }

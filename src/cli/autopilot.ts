@@ -36,7 +36,7 @@ async function main(): Promise<void> {
 
   if (step === "advance") {
     const report = await runAdvanceStep(store);
-    console.log(`Audio in coda: ${report.tts}. Video in coda: ${report.render}. Pubblicazioni in coda: ${report.published}.`);
+    console.log(`Audio in coda: ${report.tts}. Video in coda: ${report.render}. Pubblicazioni in coda: ${report.published}. Video senza copertina, in attesa: ${report.missingCover}.`);
     for (const error of report.errors) console.log(`Non avanzato: ${error}`);
     return;
   }

@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scriptDraftSchema } from "@/src/editorial/schema";
+import { type ScriptDraft, storedDraftSchema } from "@/src/editorial/schema";
+import { buildCoverSpec, COVER_TEMPLATE, type CoverSpec, newsDate, pngSize, validateRenderedCover } from "@/src/media/cover-spec";
 import { toSrt } from "@/src/media/captions";
 import { buildRenderSpec, citedPublishers, type RenderSpec, validateRenderedVideo, type VideoEngine } from "@/src/media/render-spec";
 import { type ClaimedJob, type JobOutcome, type JobQueue, runQueuedJobs } from "./job-runner";
@@ -35,13 +36,27 @@ export interface RenderJobDeps {
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
-function specFor(version: VersionToRender, audioPath: string, durationSeconds: number): RenderSpec {
-  const draft = scriptDraftSchema.safeParse(version.content);
+function draftOf(version: VersionToRender): ScriptDraft {
+  const draft = storedDraftSchema.safeParse(version.content);
   if (!draft.success) throw new Error("render_script_invalid");
+  return draft.data;
+}
+
+function specFor(draft: ScriptDraft, version: VersionToRender, audioPath: string, durationSeconds: number): RenderSpec {
   try {
-    return buildRenderSpec(draft.data, citedPublishers(draft.data, version.evidence), audioPath, durationSeconds);
+    return buildRenderSpec(draft, citedPublishers(draft, version.evidence), audioPath, durationSeconds);
   } catch {
     throw new Error("render_spec_invalid");
+  }
+}
+
+/** The cover of the same approved version: its checked cover text, its cited sources, the date of its newest source. */
+function coverSpecFor(draft: ScriptDraft, version: VersionToRender, versionId: string, now: Date): CoverSpec {
+  const cited = new Set([...draft.sentences, ...(draft.cover ? [draft.cover] : [])].flatMap((item) => item.evidence.map((ref) => ref.evidenceId)));
+  try {
+    return buildCoverSpec(draft, citedPublishers(draft, version.evidence), newsDate(version.evidence, cited, now), versionId);
+  } catch {
+    throw new Error("render_cover_spec_invalid");
   }
 }
 
@@ -52,20 +67,30 @@ async function produce(deps: RenderJobDeps, job: ClaimedJob): Promise<Record<str
   const audio = await store.loadAudioAsset(job.scriptVersionId);
   if (!audio) throw new Error("render_audio_missing");
 
+  const draft = draftOf(version);
+  const now = (deps.now ?? (() => new Date()))();
   const dir = await mkdtemp(join(tmpdir(), "ogniora-render-"));
   try {
     const audioFile = join(dir, "audio.mp3");
     const videoFile = join(dir, "video.mp4");
-    await writeFile(audioFile, await store.downloadFile(audio.storagePath));
+    const coverFile = join(dir, "cover.png");
 
+    // The cover first: it is quick, and a cover that cannot be drawn stops the job before the long render.
+    const coverSpec = coverSpecFor(draft, version, job.scriptVersionId, now);
+    const renderedCover = await engine.renderCover(coverSpec, coverFile);
+    const cover = await readFile(coverFile);
+    const header = pngSize(cover);
+    const [coverProblem] = validateRenderedCover({ ...renderedCover, ...(header ?? { width: 0, height: 0 }), sizeBytes: cover.byteLength });
+    if (coverProblem) throw new Error(`render_cover_${coverProblem}`);
+
+    await writeFile(audioFile, await store.downloadFile(audio.storagePath));
     const durationSeconds = await engine.probeDuration(audioFile);
-    const spec = specFor(version, audio.storagePath, durationSeconds);
+    const spec = specFor(draft, version, audio.storagePath, durationSeconds);
     const rendered = await engine.render(spec, audioFile, videoFile);
     const [problem] = validateRenderedVideo(rendered, spec);
     if (problem) throw new Error(`render_${problem}`);
 
     const days = await store.loadPreviewRetentionDays();
-    const now = (deps.now ?? (() => new Date()))();
     const shared = {
       jobId: job.id,
       scriptVersionId: job.scriptVersionId,
@@ -98,7 +123,26 @@ async function produce(deps: RenderJobDeps, job: ClaimedJob): Promise<Record<str
       sha256: sha256(subtitles),
       rights: { derivedFrom: "approved_script" },
     });
-    return { videoAssetId, durationSeconds: rendered.durationSeconds, sizeBytes: video.byteLength };
+    // Stable path per version: a rerun overwrites the same file and the same asset row.
+    const coverPath = `thumbnail/${job.scriptVersionId}/${COVER_TEMPLATE}.png`;
+    await store.saveFile(coverPath, cover, "image/png");
+    const thumbnailAssetId = await store.recordAsset({
+      ...shared,
+      kind: "thumbnail",
+      mimeType: "image/png",
+      storagePath: coverPath,
+      sizeBytes: cover.byteLength,
+      sha256: sha256(cover),
+      rights: {
+        template: COVER_TEMPLATE,
+        engine: engine.name,
+        imagery: "original_vector_illustration",
+        visual: coverSpec.visual,
+        text: coverSpec.textSource === "cover" ? "approved_script_cover" : "approved_script_title",
+        licence: "owned",
+      },
+    });
+    return { videoAssetId, thumbnailAssetId, durationSeconds: rendered.durationSeconds, sizeBytes: video.byteLength };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

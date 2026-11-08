@@ -42,7 +42,7 @@ export class SupabaseAutopilotStore implements AutopilotStore {
     const [versions, jobs, assets, queue] = await Promise.all([
       this.client.from("script_versions").select("id").in("id", approved).gt("created_at", since),
       this.client.from("production_jobs").select("script_version_id, kind").in("script_version_id", approved),
-      this.client.from("media_assets").select("script_version_id, kind").in("script_version_id", approved).in("kind", ["audio", "video"]).is("deleted_at", null),
+      this.client.from("media_assets").select("script_version_id, kind").in("script_version_id", approved).in("kind", ["audio", "video", "thumbnail"]).is("deleted_at", null),
       this.client.from("publication_queue").select("script_version_id").in("script_version_id", approved),
     ]);
     if (versions.error || jobs.error || assets.error || queue.error) throw new Error("autopilot_state");
@@ -55,6 +55,7 @@ export class SupabaseAutopilotStore implements AutopilotStore {
       hasRenderJob: has(jobs.data, id, "render"),
       hasAudio: has(assets.data, id, "audio"),
       hasVideo: has(assets.data, id, "video"),
+      hasThumbnail: has(assets.data, id, "thumbnail"),
       queued: has(queue.data, id),
     }));
   }
@@ -73,11 +74,11 @@ export class SupabaseAutopilotStore implements AutopilotStore {
     const { data, error } = await this.client
       .from("publication_queue")
       .select("id")
-      .eq("status", "pending")
-      .eq("privacy", "public")
-      .not("public_authorized_at", "is", null)
+      // New public uploads, and items already on YouTube that still need their cover or visibility.
+      .or("and(status.eq.pending,privacy.eq.public,public_authorized_at.not.is.null),status.eq.processing,status.eq.finalizing")
+      .lt("thumbnail_attempts", 5)
       .order("created_at")
-      .limit(3);
+      .limit(5);
     if (error) throw new Error("autopilot_uploads");
     return data.map((row) => row.id as string);
   }

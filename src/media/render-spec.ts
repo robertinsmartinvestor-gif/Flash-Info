@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ScriptDraft } from "@/src/editorial/schema";
+import type { CoverSpec, RenderedCover } from "./cover-spec";
 import { buildCaptions } from "./captions";
 
 export const FRAME = { width: 1080, height: 1920, fps: 30 } as const;
@@ -70,6 +71,8 @@ export interface VideoEngine {
   readonly name: string;
   probeDuration(audioFile: string): Promise<number>;
   render(spec: RenderSpec, audioFile: string, outputPath: string): Promise<RenderedVideo>;
+  /** A PNG still of the cover. Fails rather than clip text. */
+  renderCover(spec: CoverSpec, outputPath: string): Promise<RenderedCover>;
 }
 
 /** 50 MB is the per-file limit of Supabase Storage on the free plan. */

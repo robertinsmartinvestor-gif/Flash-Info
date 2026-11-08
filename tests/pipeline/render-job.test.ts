@@ -2,7 +2,17 @@ import { writeFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import { citedPublishers, type VideoEngine } from "@/src/media/render-spec";
 import { type RenderJobDeps, type RenderStore, runRenderJobs } from "@/src/pipeline/render-job";
-import { validDraft } from "../helpers/fixtures";
+import { validDraft, withoutCover } from "../helpers/fixtures";
+
+/** A PNG header for 1080x1920: what the job reads to confirm the size. */
+const PNG = (() => {
+  const bytes = new Uint8Array(33);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, 1080);
+  view.setUint32(20, 1920);
+  return bytes;
+})();
 
 const EVIDENCE = [{ evidenceId: "E1", publisher: "ANSA" }, { evidenceId: "E9", publisher: "Mai citata" }];
 
@@ -28,6 +38,10 @@ function fakeEngine(overrides: Partial<VideoEngine> = {}): VideoEngine {
     render: vi.fn(async (_spec, _audio, outputPath) => {
       await writeFile(outputPath, new Uint8Array([1, 2, 3]));
       return { path: outputPath, durationSeconds: 45, width: 1080, height: 1920, sizeBytes: 3 };
+    }),
+    renderCover: vi.fn(async (_spec, outputPath) => {
+      await writeFile(outputPath, PNG);
+      return { path: outputPath, width: 1080, height: 1920, sizeBytes: PNG.byteLength };
     }),
     ...overrides,
   };
@@ -83,6 +97,61 @@ describe("runRenderJobs", () => {
     const engine = fakeEngine({ render: async (_spec, _audio, path) => ({ path, durationSeconds: 45, width: 1920, height: 1080, sizeBytes: 3 }) });
     await expect(run(store, engine)).resolves.toEqual([{ jobId: "job-1", status: "failed", errorCode: "render_wrong_resolution" }]);
     expect(store.saveFile).not.toHaveBeenCalled();
+  });
+
+  it("draws the cover of the same approved version and stores it as a thumbnail on a stable path", async () => {
+    const store = fakeStore();
+    const engine = fakeEngine();
+    await expect(run(store, engine)).resolves.toEqual([{ jobId: "job-1", status: "succeeded" }]);
+
+    const cover = vi.mocked(engine.renderCover).mock.calls[0]?.[0];
+    expect(cover).toMatchObject({ headline: validDraft().cover!.headline, subline: validDraft().cover!.subline, visual: "politica", sources: ["ANSA"], textSource: "cover" });
+    const saved = vi.mocked(store.saveFile).mock.calls.find(([path]) => path === "thumbnail/version-1/cover-v1.png");
+    expect(saved?.[2]).toBe("image/png");
+    expect(Buffer.from(saved![1]).equals(Buffer.from(PNG))).toBe(true);
+    expect(store.recordAsset).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "thumbnail",
+      scriptVersionId: "version-1",
+      mimeType: "image/png",
+      storagePath: "thumbnail/version-1/cover-v1.png",
+      sizeBytes: PNG.byteLength,
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      rights: expect.objectContaining({ imagery: "original_vector_illustration", text: "approved_script_cover", licence: "owned" }),
+    }));
+  });
+
+  it("gives a version saved before covers existed a cover from its checked title", async () => {
+    const older = withoutCover();
+    const engine = fakeEngine();
+    const store = fakeStore({ loadVersionToRender: async () => ({ scriptId: "s", content: older, evidence: EVIDENCE, approved: true }) });
+    await expect(run(store, engine)).resolves.toEqual([{ jobId: "job-1", status: "succeeded" }]);
+    expect(vi.mocked(engine.renderCover).mock.calls[0]?.[0]).toMatchObject({ headline: older.title, subline: "", textSource: "title_fallback" });
+    expect(store.recordAsset).toHaveBeenCalledWith(expect.objectContaining({ kind: "thumbnail", rights: expect.objectContaining({ text: "approved_script_title" }) }));
+  });
+
+  it.each([
+    ["text the layout would clip", { renderCover: async () => { throw new Error("render_cover_text_overflow"); } }, "render_cover_text_overflow"],
+    ["a cover of the wrong size", {
+      renderCover: async (_spec: unknown, path: string) => {
+        const wide = PNG.slice();
+        new DataView(wide.buffer).setUint32(16, 1920);
+        await writeFile(path, wide);
+        return { path, width: 1080, height: 1920, sizeBytes: wide.byteLength };
+      },
+    }, "render_cover_wrong_resolution"],
+    ["a file that is not a PNG", {
+      renderCover: async (_spec: unknown, path: string) => {
+        await writeFile(path, new Uint8Array([1, 2, 3]));
+        return { path, width: 1080, height: 1920, sizeBytes: 3 };
+      },
+    }, "render_cover_wrong_resolution"],
+  ])("stores neither video nor cover for %s", async (_name, overrides, errorCode) => {
+    const store = fakeStore();
+    const engine = fakeEngine(overrides as Partial<VideoEngine>);
+    await expect(run(store, engine)).resolves.toEqual([{ jobId: "job-1", status: "failed", errorCode }]);
+    expect(engine.render).not.toHaveBeenCalled();
+    expect(store.saveFile).not.toHaveBeenCalled();
+    expect(store.recordAsset).not.toHaveBeenCalled();
   });
 
   it("does not let unexpected error text reach the log or the database", async () => {

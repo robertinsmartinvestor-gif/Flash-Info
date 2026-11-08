@@ -1,6 +1,8 @@
 name: Distribution
 
-# Uploads one approved queue item by hand. The autopilot uploads on its own schedule.
+# Uploads one approved queue item by hand, or resumes one already on YouTube that
+# still waits for its cover or its visibility: the same id, never a second upload.
+# The autopilot does both on its own schedule.
 on:
   workflow_dispatch:
     inputs:

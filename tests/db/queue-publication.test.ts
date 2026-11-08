@@ -29,7 +29,7 @@ async function seed({ status = "approved", video = true, meta = META }: { status
   if (status === "approved") await db.query("update scripts set approved_version_id = $1 where id = $2", [version.id, script.id]);
   if (video) {
     await db.query(
-      `insert into media_assets (script_version_id, kind, storage_path, mime_type, size_bytes) values ($1, 'video', $2, 'video/mp4', 1)`,
+      `insert into media_assets (script_version_id, kind, storage_path, mime_type, size_bytes) values ($1, 'video', $2, 'video/mp4', 1), ($1, 'thumbnail', $2 || '.png', 'image/png', 1)`,
       [version.id, `video/${randomUUID()}.mp4`],
     );
   }

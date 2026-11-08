@@ -1,10 +1,12 @@
-import { writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { loadPublicationConfig } from "@/src/core/publication-policy";
-import { buildInsertRequest, uploadVideo, type QueueItem } from "@/src/distribution/youtube";
+import { publishQueueItem, type PublishOutcome } from "@/src/distribution/publish";
+import { createYoutubeApi } from "@/src/distribution/youtube";
+import { SupabasePublicationStore } from "@/src/store/publication";
 import { failJob } from "./shared";
 
 const env = z.object({
@@ -15,42 +17,45 @@ const env = z.object({
   YOUTUBE_REFRESH_TOKEN: z.string().min(1),
 });
 
+// Public log: ids, privacy and error codes only.
+function describe(outcome: PublishOutcome): string {
+  switch (outcome.stage) {
+    case "nothing":
+      return "Niente da fare: già gestito, in corso o non approvato.";
+    case "uploaded_without_cover":
+      return `Caricato senza copertina (voce precedente alle copertine): ${outcome.videoId} (${outcome.privacy})`;
+    case "waiting_processing":
+      return `In elaborazione su YouTube, resta privato fino al prossimo giro: ${outcome.videoId}`;
+    case "thumbnail_failed":
+      return `Copertina non accettata, resta privato: ${outcome.videoId} ${outcome.error}`;
+    case "held_private":
+      return `Resta privato: ${outcome.videoId} ${outcome.reason}`;
+    case "published_with_cover":
+      return `Copertina confermata da YouTube, visibilità applicata: ${outcome.videoId} (${outcome.privacy})`;
+  }
+}
+
 async function main(): Promise<void> {
   const queueId = z.uuid().parse(process.argv[process.argv.indexOf("--queue-id") + 1]);
   const vars = env.parse(process.env);
   const config = loadPublicationConfig(process.env);
   const db = createClient(vars.SUPABASE_URL, vars.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-
-  const { data, error } = await db.rpc("begin_upload", { p_queue_id: queueId });
-  if (error) throw new Error(`begin_upload:${error.code}`);
-  if (!data) {
-    console.log("Niente da caricare: già gestito, in corso o non approvato.");
-    return;
-  }
-  const item = data as QueueItem;
-
+  const workDir = await mkdtemp(join(tmpdir(), "ogniora-upload-"));
   try {
-    const request = buildInsertRequest(config, item);
-    if (!item.storage_path) throw new Error("video_asset_missing");
-    const file = await db.storage.from("media").download(item.storage_path);
-    if (file.error) throw new Error("video_download_failed");
-    const videoPath = join(tmpdir(), `${queueId}.mp4`);
-    await writeFile(videoPath, Buffer.from(await file.data.arrayBuffer()));
-
-    const videoId = await uploadVideo(
-      { clientId: vars.YOUTUBE_CLIENT_ID, clientSecret: vars.YOUTUBE_CLIENT_SECRET, refreshToken: vars.YOUTUBE_REFRESH_TOKEN },
-      request,
-      videoPath,
+    const outcome = await publishQueueItem(
+      {
+        store: new SupabasePublicationStore(db),
+        api: createYoutubeApi({ clientId: vars.YOUTUBE_CLIENT_ID, clientSecret: vars.YOUTUBE_CLIENT_SECRET, refreshToken: vars.YOUTUBE_REFRESH_TOKEN }),
+        config,
+        workDir,
+      },
+      queueId,
     );
-    const privacy = request.requestBody.status.publishAt ? "public" : request.requestBody.status.privacyStatus;
-    const registered = await db.rpc("register_youtube_upload", { p_queue_id: queueId, p_video_id: videoId, p_privacy: privacy });
-    // The video exists: leaving "uploading" in place stops any retry. The id is logged to reconcile by hand.
-    if (registered.error) throw Object.assign(new Error(`upload_not_registered:${videoId}`), { keepUploading: true });
-    console.log(`Caricato: ${videoId} (${privacy})`);
-  } catch (error) {
-    const keep = (error as { keepUploading?: boolean }).keepUploading === true;
-    if (!keep) await db.rpc("fail_upload", { p_queue_id: queueId, p_error: error instanceof Error ? error.message : "unknown" });
-    throw error;
+    console.log(describe(outcome));
+    // Waiting for YouTube is normal; a refused cover or a video held private needs a look.
+    if (outcome.stage === "thumbnail_failed" || outcome.stage === "held_private") process.exitCode = 1;
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
   }
 }
 
