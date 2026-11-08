@@ -201,10 +201,20 @@ da `last_error`. Il video resta visibile con la miniatura automatica e il pilota
 fino a 5 tentativi, ripartendo dall'id YouTube salvato. Dopo 5 tentativi serve una persona:
 
 1. guarda `thumbnail_error`;
-2. carica la copertina a mano da YouTube Studio, se serve;
+2. carica la copertina con il workflow **Thumbnail** (sotto), se serve;
 3. azzera `thumbnail_attempts` per ritentare.
 
 Un runner interrotto in `finalizing` libera la voce dopo 30 minuti.
+
+**Copertina a mano.** Il workflow **Thumbnail** imposta via API una copertina scelta da una persona su
+un video già su YouTube, senza toccarne la visibilità:
+
+1. carica il PNG nel bucket privato `media`, cartella `thumbnail/manual/` (dashboard Supabase,
+   Storage). Verticale 9:16, almeno 720 px di larghezza, al massimo 2 MB;
+2. avvia **Thumbnail** con l'id del video e il percorso, per esempio `thumbnail/manual/<id>.png`;
+3. il log dice "Copertina confermata da YouTube" solo se l'API risponde con la nuova miniatura.
+
+Ogni parola della copertina va confrontata prima con lo script e le fonti del video.
 
 **Permessi.** `thumbnails.set` funziona con lo scope `youtube.upload`, quello del token attuale. Lo
 stato di elaborazione di `videos.list` richiede `youtube` o `youtube.force-ssl`; senza, il job usa i
