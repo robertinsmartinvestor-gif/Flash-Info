@@ -6,9 +6,11 @@ name: Autopilot
 # To stop everything: disable this workflow in the Actions tab, or set
 # app_settings.autopilot.enabled to false.
 on:
+  # n8n starts it every hour on the dot (n8n/ogniora-autopilot.json). This
+  # sparse GitHub schedule is only a fallback if n8n stops: GitHub cron often
+  # runs late. Overlapping runs queue, and the database rules cap the output.
   schedule:
-    # Every hour from 06:23 to 22:23 Italian winter time.
-    - cron: "23 5-21 * * *"
+    - cron: "47 5-20/3 * * *"
   workflow_dispatch:
 
 permissions:

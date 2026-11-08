@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `ci.yml` | PR e push su `main` | Typecheck, lint, test, build, audit, gitleaks |
 | `editorial.yml` | n8n o manuale | Raccolta notizie, generazione script |
-| `autopilot.yml` | Ogni ora, 6-22 | Tutta la catena fino all'upload pubblico: vedi "Pilota automatico" |
+| `autopilot.yml` | n8n ogni ora 6-22, GitHub ogni 3 ore come riserva | Tutta la catena fino all'upload pubblico: vedi "Pilota automatico" |
 | `production.yml` | Manuale | Audio e video dei job in coda |
 | `distribution.yml` | Manuale | Upload di una voce approvata |
 | `maintenance.yml` | n8n o manuale | Job bloccati, asset scaduti, retention, spesa |
@@ -25,8 +25,7 @@ controlla che i nomi delle credenziali non siano già in uso.
 
 | Workflow | Frequenza | Funzione |
 | --- | --- | --- |
-| 1 - Raccolta notizie | 2 ore | Avvia `editorial.yml` con `ingest` |
-| 2 - Script | 10 minuti | Avvia `compose` per i candidati scelti, massimo 3 per giro |
+| Pilota automatico | Ogni ora, 6-22 (Europe/Rome) | Avvia `autopilot.yml`. Usa solo la credenziale `OgniOra GitHub` |
 | 3 - Controllo | Ogni giorno | Manutenzione e notifica riepilogativa |
 
 Credenziali da creare in n8n:
@@ -36,17 +35,16 @@ Credenziali da creare in n8n:
 | `OgniOra GitHub` | Header Auth | `Authorization: Bearer <token>`. Token fine-grained, solo questo repository, permesso *Actions: read and write* |
 | `OgniOra Supabase` | Custom Auth | `{"headers": {"apikey": "<chiave>", "Authorization": "Bearer <chiave>"}}` |
 
-La chiave Supabase è la service role: dà pieno accesso ai dati. Se l'istanza n8n è condivisa con
-altri progetti o persone, va valutato un ruolo di sola lettura dedicato prima di attivare i workflow.
+Il workflow 3 è l'unico che legge Supabase, con la service role, che dà pieno accesso ai dati: l'istanza n8n
+è condivisa con Lepefy, quindi prima di attivarlo va valutato un ruolo di sola lettura dedicato.
 
 Variabili d'ambiente: `OGNIORA_SUPABASE_URL`, `OGNIORA_NOTIFY_WEBHOOK`.
 
-Il workflow 2 legge una volta ogni 10 minuti: con il progetto Supabase attivo, questo tiene
-lontana anche la pausa per inattività del piano free.
 
 ## Pilota automatico
 
-`autopilot.yml` gira ogni ora dalle 6 alle 22 (ora italiana invernale) e in ogni giro:
+`autopilot.yml` parte ogni ora dalle 6 alle 22 da n8n (workflow *OgniOra - Pilota automatico*),
+che è puntuale. Il cron di GitHub, spesso in ritardo, resta solo come riserva ogni 3 ore. In ogni giro:
 
 1. raccoglie le notizie;
 2. sceglie al massimo un candidato Flash fresco, con il punteggio più alto, e scrive lo script;
