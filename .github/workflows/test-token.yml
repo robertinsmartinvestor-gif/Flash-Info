@@ -12,17 +12,32 @@ jobs:
     timeout-minutes: 2
     steps:
       # The response body contains a live access token and this repository's
-      # logs are public: only the HTTP status may ever be printed.
+      # logs are public: only the HTTP status and the granted scopes (names of
+      # permissions, not secrets) may ever be printed.
       - name: Test refresh token
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST https://oauth2.googleapis.com/token \
+          body="$RUNNER_TEMP/token.json"
+          status=$(curl -s -o "$body" -w '%{http_code}' -X POST https://oauth2.googleapis.com/token \
             --data-urlencode "client_id=$YOUTUBE_CLIENT_ID" \
             --data-urlencode "client_secret=$YOUTUBE_CLIENT_SECRET" \
             --data-urlencode "refresh_token=$YOUTUBE_REFRESH_TOKEN" \
             -d "grant_type=refresh_token")
           echo "HTTP $status"
+          if [ "$status" = "200" ]; then
+            scopes=$(jq -r '.scope // ""' "$body")
+            echo "Scopes: $scopes"
+            # thumbnails.set works with youtube.upload. Reading YouTube's processing
+            # status needs youtube or youtube.force-ssl: without it the cover job
+            # just waits and retries a few times instead of checking.
+            case " $scopes " in
+              *" https://www.googleapis.com/auth/youtube "*|*" https://www.googleapis.com/auth/youtube.force-ssl "*) echo "Copertine: scope completo." ;;
+              *" https://www.googleapis.com/auth/youtube.upload "*) echo "Copertine: scope sufficiente (stato di elaborazione non leggibile, si usano tentativi distanziati)." ;;
+              *) echo "::warning::Copertine: manca anche youtube.upload, il refresh token va rigenerato." ;;
+            esac
+          fi
+          rm -f "$body"
           test "$status" = "200"

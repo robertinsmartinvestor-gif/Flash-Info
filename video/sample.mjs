@@ -1,9 +1,9 @@
-// Renders invented text over silence: proves the template and the runner without
+// Renders invented text over silence, and a cover with invented text: proves the template and the runner without
 // touching Supabase, a provider or a real script, so the output may be public.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { render } from "./render.mjs";
+import { render, renderCover } from "./render.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -33,3 +33,11 @@ await writeFile(audioPath, silentWav(spec.durationSeconds));
 const started = Date.now();
 const result = await render({ spec, audioPath, outputPath: join(out, "sample.mp4"), stillPath: join(out, "sample.png"), stillAtSeconds: 3 });
 console.log(JSON.stringify({ ...result, renderSeconds: Math.round((Date.now() - started) / 1000) }));
+
+const coverSpec = JSON.parse(await readFile(join(here, "sample-cover.json"), "utf8"));
+const visuals = process.env.SAMPLE_ALL_VISUALS ? ["carburante", "economia", "politica", "esteri", "giustizia", "salute", "meteo", "trasporti", "lavoro", "tecnologia", "ambiente", "generico"] : [coverSpec.visual];
+for (const [index, visual] of visuals.entries()) {
+  const name = visuals.length === 1 ? "sample-cover.png" : `sample-cover-${visual}.png`;
+  const cover = await renderCover({ spec: { ...coverSpec, visual, seed: coverSpec.seed + index * 7919 }, outputPath: join(out, name) });
+  console.log(JSON.stringify({ cover: name, ...cover }));
+}

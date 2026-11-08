@@ -21,6 +21,31 @@ export async function probe(file) {
   return { durationSeconds: media.slowDurationInSeconds, width: media.dimensions?.width ?? 0, height: media.dimensions?.height ?? 0 };
 }
 
+/** Width and height from the PNG header. */
+async function pngSize(file) {
+  const header = (await readFile(file)).subarray(0, 24);
+  if (header.toString("latin1", 1, 4) !== "PNG") return { width: 0, height: 0 };
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+}
+
+/** The cover still. Its layout code fails the render rather than clip any text. */
+export async function renderCover({ spec, outputPath }) {
+  await ensureBrowser();
+  const serveUrl = await bundle({ entryPoint: join(here, "src/index.ts") });
+  const inputProps = {
+    headline: spec.headline,
+    qualifier: spec.qualifier,
+    subline: spec.subline,
+    dateLabel: spec.dateLabel,
+    sources: spec.sources,
+    visual: spec.visual,
+    seed: spec.seed,
+  };
+  const composition = await selectComposition({ serveUrl, id: spec.template, inputProps, logLevel: "error" });
+  await renderStill({ serveUrl, composition, inputProps, output: outputPath, imageFormat: "png", logLevel: "error" });
+  return { ...(await pngSize(outputPath)), sizeBytes: (await stat(outputPath)).size };
+}
+
 export async function render({ spec, audioPath, outputPath, stillPath, stillAtSeconds = 0 }) {
   await ensureBrowser();
   const publicDir = await mkdtemp(join(tmpdir(), "ogniora-public-"));
@@ -49,11 +74,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const [specPath, audioPath, outputPath] = args;
       const spec = JSON.parse(await readFile(specPath, "utf8"));
       console.log(JSON.stringify(await render({ spec, audioPath, outputPath })));
+    } else if (command === "cover") {
+      const [specPath, outputPath] = args;
+      const spec = JSON.parse(await readFile(specPath, "utf8"));
+      console.log(JSON.stringify(await renderCover({ spec, outputPath })));
     } else {
       throw new Error("unknown_command");
     }
   } catch (error) {
-    console.error(process.env.RENDER_VERBOSE ? error : `render.mjs: ${error?.name ?? "Error"}`);
+    const code = /cover_text_overflow/.test(String(error?.message)) ? "cover_text_overflow" : error?.name ?? "Error";
+    console.error(process.env.RENDER_VERBOSE ? error : `render.mjs: ${code}`);
     process.exitCode = 1;
   }
 }

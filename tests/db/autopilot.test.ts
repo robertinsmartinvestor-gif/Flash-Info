@@ -37,7 +37,7 @@ async function script({ verdict = "needs_review", findings = [] as Array<{ check
 }
 
 async function addVideo(versionId: string) {
-  await db.query(`insert into media_assets (script_version_id, kind, storage_path, mime_type, size_bytes) values ($1, 'video', $2, 'video/mp4', 1)`, [versionId, `video/${randomUUID()}.mp4`]);
+  await db.query(`insert into media_assets (script_version_id, kind, storage_path, mime_type, size_bytes) values ($1, 'video', $2, 'video/mp4', 1), ($1, 'thumbnail', $2 || '.png', 'image/png', 1)`, [versionId, `video/${randomUUID()}.mp4`]);
 }
 
 beforeAll(async () => {

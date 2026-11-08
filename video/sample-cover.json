@@ -1,0 +1,12 @@
+{
+  "template": "cover-v1",
+  "frame": { "width": 1080, "height": 1920 },
+  "headline": "Copertina di prova del template",
+  "qualifier": "PER ORA",
+  "subline": "Testo inventato, non è una notizia",
+  "dateLabel": "1 GEN 2030",
+  "sources": ["Fonte di prova", "Altra fonte"],
+  "visual": "carburante",
+  "seed": 12345,
+  "textSource": "cover"
+}

@@ -97,13 +97,13 @@ update app_settings set value = jsonb_set(value, '{enabled}', 'false') where key
 Per togliere un video già pubblicato: YouTube Studio.
 
 Costi: con 3 notizie al giorno circa 0,12 USD l'una (script e voce), quindi circa 11 USD al mese,
-sotto il tetto di spesa impostato nello Studio. Un upload consuma 1.600 delle 10.000 unità giornaliere
-della YouTube Data API.
+sotto il tetto di spesa impostato nello Studio. La copertina non costa nulla: è disegnata dal template.
+Per la quota della YouTube Data API vedi [Copertine](#copertine).
 
 ## Pubblicazione
 
-Stati di `publication_queue`: `pending`, `scheduled`, `uploading`, `uploaded`, `failed`,
-`cancelled`. Ogni passaggio finisce in `audit_logs`.
+Stati di `publication_queue`: `pending`, `scheduled`, `uploading`, `processing`, `finalizing`,
+`uploaded`, `failed`, `cancelled`. Ogni passaggio finisce in `audit_logs`.
 
 Perché un video diventi pubblico devono essere vere **tutte** queste condizioni:
 
@@ -121,8 +121,116 @@ YouTube solo se il pubblico è autorizzato. Senza, il video resta privato.
 ### Upload rimasti in `uploading`
 
 Dopo un crash una voce resta in `uploading` e **non** viene ritentata: il video potrebbe già
-esistere. Controlla YouTube Studio, poi registra il video con `register_youtube_upload` oppure
-riporta la voce in `failed`. `maintenance.yml` riporta quante voci sono in questo stato.
+esistere. Il log del job riporta `upload_not_registered:<id YouTube>` quando il video è stato caricato
+ma l'id non è stato salvato. Controlla YouTube Studio, poi:
+
+- voce **con copertina** (`thumbnail_asset_id` valorizzato) e video presente: registra l'id con
+  `select record_youtube_video('<queue_id>', '<id YouTube>', '<privacy su YouTube>')` (ruolo
+  service). La voce passa in `processing` e il giro successivo del pilota, o **Distribution** con lo
+  stesso `queue_id`, mette la copertina. Il video non viene caricato di nuovo;
+- voce **senza copertina** e video presente: `register_youtube_upload` come prima;
+- video assente: riporta la voce in `failed`, il giro successivo la ricarica.
+
+`maintenance.yml` riporta quante voci sono in `uploading`.
+
+## Copertine
+
+Ogni nuovo Short ha una copertina 1080×1920 PNG, legata alla stessa versione approvata da cui
+derivano audio e video.
+
+**Testo.** Lo script contiene un blocco `cover`, scritto dal modello insieme alle frasi:
+
+- `headline`: da 3 a 7 parole, al massimo 40 caratteri;
+- `qualifier`: vuoto oppure uno tra `PER ORA`, `IN ATTESA`, `NON CONFERMATO`, `SECONDO LE FONTI`;
+- `subline`: al massimo 50 caratteri, facoltativa;
+- `visual`: tema dell'illustrazione;
+- `evidence`: citazioni testuali delle fonti.
+
+La copertina passa gli stessi controlli di una frase di fatto: fonte citata, citazione testuale,
+nessun numero o nome assente dalle fonti. In più ha controlli propri su lunghezza e tono (niente
+`!`, `?` o parole sensazionalistiche). Il verificatore semantico la valuta come un'affermazione in
+più: un esito `partial` fa riscrivere lo script come per le frasi. Ogni problema della copertina
+blocca lo script. Le versioni salvate prima delle copertine non hanno il blocco: la copertina usa il
+loro titolo, già controllato, e nessun'altra affermazione (`rights.text = approved_script_title`).
+
+**Grafica.** Template Remotion `cover-v1` (`video/src/CoverV1.tsx`):
+
+- testo e marchio composti dal codice;
+- illustrazione vettoriale originale per tema (`video/src/Illustrations.tsx`), di proprietà del
+  progetto, senza foto né scritte;
+- colori e composizione che variano per versione.
+
+Il testo resta fuori dal 20% inferiore e dal margine destro dei comandi di YouTube. Il titolo si
+rimpicciolisce finché entra; se non entra nemmeno alla dimensione minima, il render fallisce con
+`render_cover_text_overflow`. Una copertina con testo tagliato non esce mai.
+
+**Pipeline.** Il job video rende prima la copertina, poi il video. Controlla dimensioni e peso del
+PNG (massimo 2 MB) e salva tutto nel bucket privato `media`:
+
+- percorso `thumbnail/<script_version_id>/cover-v1.png`;
+- `media_assets.kind = 'thumbnail'`, con hash e provenienza in `rights`.
+
+Una versione entra in coda solo con video **e** copertina: `queue_publication` e il pilota lo
+verificano. Se la copertina manca, il pilota conta la versione come "senza copertina, in attesa" e non
+la mette in coda.
+
+**Upload in due tempi.**
+
+1. `uploading`: `videos.insert` con la visibilità finale decisa da `decideUpload()`. Un video
+   pubblico esce subito e notifica gli iscritti, come prima delle copertine. L'id restituito viene
+   salvato subito, con la sua visibilità (`record_youtube_video`); da lì la voce non può più essere
+   caricata di nuovo.
+2. `processing` / `finalizing`: la copertina viene applicata sul video già pubblicato. In un giro:
+   - attesa con tentativi limitati che `videos.list` riporti `processingStatus = succeeded`
+     (12 controlli ogni 15 s, poi riprova al giro dopo). Sugli Short `thumbnails.set` funziona
+     solo a elaborazione conclusa;
+   - se il token non può leggere lo stato (serve uno scope oltre a `youtube.upload`), al posto del
+     controllo fa fino a 4 tentativi distanziati di 30 s, contati come un tentativo solo;
+   - `thumbnails.set` con il PNG;
+   - conferma solo se l'API risponde con la nuova miniatura.
+3. `uploaded`: copertina confermata. Il log dice "Copertina confermata da YouTube" solo a questo punto.
+
+La visibilità non cambia mai dopo l'upload: nessuna chiamata a `videos.update`. Un `publishAt` futuro
+diventa privato + `publishAt`; uno già passato diventa pubblico subito, mai prima del dovuto.
+
+Per qualche minuto il video pubblico mostra la miniatura automatica di YouTube, finché la copertina
+non viene confermata. Se YouTube elabora a lungo, la copertina arriva al giro successivo del pilota.
+
+Errori della copertina: `thumbnail_status = failed`, `thumbnail_attempts` e `thumbnail_error`, separati
+da `last_error`. Il video resta visibile con la miniatura automatica e il pilota ritenta a ogni giro,
+fino a 5 tentativi, ripartendo dall'id YouTube salvato. Dopo 5 tentativi serve una persona:
+
+1. guarda `thumbnail_error`;
+2. carica la copertina a mano da YouTube Studio, se serve;
+3. azzera `thumbnail_attempts` per ritentare.
+
+Un runner interrotto in `finalizing` libera la voce dopo 30 minuti.
+
+**Permessi.** `thumbnails.set` funziona con lo scope `youtube.upload`, quello del token attuale. Lo
+stato di elaborazione di `videos.list` richiede `youtube` o `youtube.force-ssl`; senza, il job usa i
+tentativi distanziati descritti sopra. Il workflow **Test Token** stampa gli scope del refresh token
+(sono nomi di permessi, non segreti). Aggiungere `youtube.force-ssl` alla prossima rigenerazione del
+token, insieme a `yt-analytics.readonly`, rende il controllo preciso, ma non è necessario.
+
+**Quota YouTube Data API** (10.000 unità al giorno di default), per ogni Short:
+
+| Chiamata | Costo | Note |
+| --- | --- | --- |
+| `videos.insert` | vedi nota | La pagina di riferimento oggi indica un contingente "Video Uploads" separato (100 upload al giorno); in passato erano 1.600 unità. Verifica in Google Cloud Console |
+| `videos.list` | 1 unità per controllo | Al massimo 12 per giro; nessuna se lo scope non lo consente |
+| `thumbnails.set` | circa 50 | Per chiamata, fino a 4 per giro senza lo stato di elaborazione |
+
+Con 3 Short al giorno la copertina aggiunge circa 150–650 unità, a seconda dei tentativi.
+
+**Rollback.**
+
+1. Revert del merge: il codice torna all'upload in un passo. Le colonne nuove sono facoltative e le
+   voci vecchie non le usano.
+2. Le voci già in `processing` sono già pubblicate con la loro visibilità: carica la copertina a mano
+   in YouTube Studio, se serve, poi `update publication_queue set status = 'uploaded'`.
+3. La migrazione può restare: è solo in avanti, ma `queue_item` richiede la copertina. Se il codice
+   torna indietro, riapplica la versione precedente di `private.queue_item` da
+   `20261108000200_autopilot.sql`, altrimenti nessuna voce nuova entra in coda.
 
 ## Script bloccati in `composing`
 
@@ -168,6 +276,7 @@ un nuovo file. Un job fallito non viene ritentato. Gli audio scadono secondo `re
 Il job scarica l'audio, ne misura la durata, costruisce la render spec e rende il template
 `flash-v1` con Remotion. Salva nel bucket privato il video e i sottotitoli SRT, con la retention
 `retention_days.media_preview`. Niente immagini giornalistiche: solo testo e sfondo generato.
+Nello stesso job disegna la copertina della versione (vedi [Copertine](#copertine)).
 
 I sottotitoli distribuiscono il tempo in base ai caratteri, perché Google non restituisce i tempi
 delle parole: **controlla la sincronia** quando guardi il video. Se l'audio è scaduto il job fallisce

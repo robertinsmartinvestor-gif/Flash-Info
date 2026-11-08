@@ -11,6 +11,7 @@ export interface VersionInProduction {
   hasAudio: boolean;
   hasRenderJob: boolean;
   hasVideo: boolean;
+  hasThumbnail: boolean;
   queued: boolean;
 }
 
@@ -22,7 +23,7 @@ export interface AutopilotStore {
   freshApprovedVersions(): Promise<VersionInProduction[]>;
   enqueueJob(versionId: string, kind: "tts" | "render"): Promise<void>;
   queuePublic(versionId: string): Promise<void>;
-  /** Public, authorized queue items still waiting for their upload. */
+  /** Public, authorized items waiting for their upload, and items on YouTube still waiting for their cover. */
   pendingPublicUploads(): Promise<string[]>;
 }
 
@@ -52,21 +53,25 @@ export interface AdvanceReport {
   tts: number;
   render: number;
   published: number;
+  /** Rendered versions with a video but no cover: they wait, they are never queued without one. */
+  missingCover: number;
   errors: string[];
 }
 
 const errorClass = (error: unknown) => (error instanceof Error ? error.message : "error").replace(/[^\w .:-]/g, "").slice(0, 80);
 
-/** Moves every fresh approved version one step further: audio, then video, then the public queue. */
+/** Moves every fresh approved version one step further: audio, then video and cover, then the public queue. */
 export async function runAdvanceStep(store: AutopilotStore): Promise<AdvanceReport> {
-  const report: AdvanceReport = { tts: 0, render: 0, published: 0, errors: [] };
+  const report: AdvanceReport = { tts: 0, render: 0, published: 0, missingCover: 0, errors: [] };
   if (!(await store.enabled())) return report;
   for (const version of await store.freshApprovedVersions()) {
     try {
       if (version.queued) continue;
-      if (version.hasVideo) {
+      if (version.hasVideo && version.hasThumbnail) {
         await store.queuePublic(version.versionId);
         report.published += 1;
+      } else if (version.hasVideo) {
+        report.missingCover += 1;
       } else if (version.hasAudio) {
         if (!version.hasRenderJob) {
           await store.enqueueJob(version.versionId, "render");

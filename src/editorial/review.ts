@@ -1,5 +1,5 @@
 import type { QcFinding } from "@/src/quality/checks";
-import { type EvidenceItem, type ScriptDraft, scriptDraftSchema } from "./schema";
+import { type EvidenceItem, type ScriptDraft, storedDraftSchema } from "./schema";
 
 export interface ScriptRow {
   id: string;
@@ -59,7 +59,7 @@ export function buildReviewItems(scripts: ScriptRow[], versions: VersionRow[]): 
   for (const script of scripts) {
     const latest = versions.filter((row) => row.script_id === script.id).sort((a, b) => b.version - a.version)[0];
     if (!latest) continue;
-    const draft = scriptDraftSchema.safeParse(latest.content);
+    const draft = storedDraftSchema.safeParse(latest.content);
     items.push({
       scriptId: script.id,
       versionId: latest.id,

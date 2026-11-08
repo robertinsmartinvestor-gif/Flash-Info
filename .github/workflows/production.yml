@@ -1,9 +1,11 @@
 name: Production
 
 # Started by hand. Takes the audio and video jobs queued from the Studio: only
-# approved versions can be queued, and the database caps how many.
-# "sample" renders invented text over silence and touches no data or secret. Its
-# artifact is public, so it must never carry a real script.
+# approved versions can be queued, and the database caps how many. The video job
+# also draws the cover of the same version; no cover, no queue item.
+# "sample" renders invented text over silence, and a cover with invented text,
+# and touches no data or secret. Its artifact is public, so it must never carry a
+# real script.
 on:
   workflow_dispatch:
     inputs:
@@ -92,4 +94,5 @@ jobs:
           path: |
             video/out/sample.mp4
             video/out/sample.png
+            video/out/sample-cover.png
           retention-days: 3

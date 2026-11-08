@@ -3,7 +3,7 @@ import { FORMATS } from "@/src/editorial/formats";
 import { buildYoutubeMetadata, hashtagsFor, toHashtag } from "@/src/editorial/generate";
 import type { ScriptDraft, ScriptSentence } from "@/src/editorial/schema";
 import { runQualityChecks } from "@/src/quality/checks";
-import { NOW, PACK, validDraft } from "../helpers/fixtures";
+import { NOW, PACK, validDraft, withoutCover } from "../helpers/fixtures";
 
 const flash = FORMATS.flash;
 const run = (draft: ScriptDraft, now = NOW) => runQualityChecks(draft, PACK, flash, now);
@@ -227,5 +227,51 @@ describe("hashtags", () => {
   it("skips tags that repeat the fixed ones and falls back to the two fixed", () => {
     expect(hashtagsFor(["Italia", "Meloni"])).toEqual(["#notizie", "#italia", "#meloni"]);
     expect(hashtagsFor(["--", "Ue"])).toEqual(["#notizie", "#italia"]);
+  });
+});
+
+describe("cover checks", () => {
+  const withCover = (cover: Partial<NonNullable<ScriptDraft["cover"]>>): ScriptDraft => {
+    const draft = validDraft();
+    return { ...draft, cover: { ...draft.cover!, ...cover } };
+  };
+  const coverChecks = (draft: ScriptDraft) =>
+    runQualityChecks(draft, PACK, FORMATS.flash, NOW).findings.filter((finding) => finding.message.startsWith("Copertina"));
+
+  it("passes a short cover the cited sources support", () => {
+    expect(coverChecks(validDraft())).toEqual([]);
+    expect(runQualityChecks(validDraft(), PACK, FORMATS.flash, NOW).checksRun).toContain("cover");
+  });
+
+  it("blocks a number or a name the cited sources do not contain", () => {
+    const checks = coverChecks(withCover({ subline: "La legge era stata approvata 5 mesi fa con Meloni" })).map((finding) => finding.check);
+    expect(checks).toContain("number_not_in_source");
+    expect(checks).toContain("name_not_in_source");
+  });
+
+  it("blocks a cover with no source, an unknown source or a quote not in the source", () => {
+    expect(coverChecks(withCover({ evidence: [] })).map((finding) => finding.check)).toContain("claim_without_source");
+    expect(coverChecks(withCover({ evidence: [{ evidenceId: "E9", quote: "x" }] })).map((finding) => finding.check)).toContain("unknown_source");
+    expect(coverChecks(withCover({ evidence: [{ evidenceId: "E2", quote: "frase inventata" }] })).map((finding) => finding.check)).toContain("quote_not_in_source");
+  });
+
+  it("keeps the headline between 3 and 7 words and 40 characters", () => {
+    expect(coverChecks(withCover({ headline: "Veneto impugnata" })).map((finding) => finding.check)).toContain("cover_headline");
+    expect(coverChecks(withCover({ headline: "Il governo impugna oggi la legge del Veneto sul fine vita" })).map((finding) => finding.check)).toContain("cover_headline");
+  });
+
+  it("refuses clickbait on the cover", () => {
+    const checks = coverChecks(withCover({ headline: "Il governo impugna la legge shock" })).map((finding) => finding.check);
+    expect(checks).toContain("cover_tone");
+    expect(coverChecks(withCover({ headline: "Il governo impugna la legge?" })).map((finding) => finding.check)).toContain("cover_tone");
+  });
+
+  it("treats every cover finding as a blocker", () => {
+    expect(coverChecks(withCover({ headline: "Veneto" })).every((finding) => finding.severity === "blocker")).toBe(true);
+  });
+
+  it("adds nothing for a version saved before covers existed", () => {
+    const older = withoutCover();
+    expect(coverChecks(older)).toEqual([]);
   });
 });

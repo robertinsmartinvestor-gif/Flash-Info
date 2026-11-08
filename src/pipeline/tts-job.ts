@@ -14,7 +14,7 @@ export interface VersionToRead {
 export interface MediaAsset {
   jobId: string;
   scriptVersionId: string;
-  kind: "audio" | "video" | "subtitles";
+  kind: "audio" | "video" | "subtitles" | "thumbnail";
   mimeType: string;
   storagePath: string;
   sizeBytes: number;

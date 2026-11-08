@@ -46,8 +46,12 @@ function setupCompose(replies: Reply[], { status = "selected", budget = 10 } = {
   return { store, router, calls };
 }
 
+// The cover is checked as one more claim, right after the sentences.
 const allSupported = (draft: ScriptDraft) => ({
-  results: draft.sentences.flatMap((sentence, index) => (sentence.kind === "connective" ? [] : [{ index, verdict: "supported", reason: "ok" }])),
+  results: [
+    ...draft.sentences.flatMap((sentence, index) => (sentence.kind === "connective" ? [] : [{ index, verdict: "supported", reason: "ok" }])),
+    ...(draft.cover ? [{ index: draft.sentences.length, verdict: "supported", reason: "ok" }] : []),
+  ],
 });
 
 function invented(): ScriptDraft {
@@ -121,6 +125,20 @@ describe("runCompose", () => {
     const { router, store } = setupCompose([invented(), draft, partial, draft, allSupported(draft)]);
     await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "pass", version: 3 });
     expect(store.versions.map((version) => version.report.verdict)).toEqual(["blocked", "needs_review", "pass"]);
+  });
+
+  it("verifies the cover like a sentence and rewrites a cover the sources only partly support", async () => {
+    const draft = validDraft();
+    const coverPartial = {
+      results: [...allSupported(draft).results.slice(0, -1), { index: draft.sentences.length, verdict: "partial", reason: "il titolo rafforza il senso" }],
+    };
+    const { store, router, calls } = setupCompose([draft, coverPartial, draft, allSupported(draft)]);
+    await expect(runCompose(store, router, "c1", NOW)).resolves.toMatchObject({ verdict: "pass", version: 2 });
+    expect(calls[1]).toContain("Il governo impugna la legge del Veneto. La legge era stata approvata 3 mesi fa");
+    expect(calls[2]).toContain("Copertina: Verifica: partial. il titolo rafforza il senso");
+    const finding = store.versions[0]?.report.findings.find((item) => item.check === "verifier");
+    expect(finding).toMatchObject({ severity: "warning" });
+    expect(finding?.sentence).toBeUndefined();
   });
 
   it("sends the script to review when the verifier fails, never to pass", async () => {

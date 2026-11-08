@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { runAdvanceStep, runEditorialStep, uploadIds, type AutopilotStore, type VersionInProduction } from "@/src/pipeline/autopilot";
 
 const version = (overrides: Partial<VersionInProduction> = {}): VersionInProduction => ({
-  versionId: "v1", hasTtsJob: false, hasAudio: false, hasRenderJob: false, hasVideo: false, queued: false, ...overrides,
+  versionId: "v1", hasTtsJob: false, hasAudio: false, hasRenderJob: false, hasVideo: false, hasThumbnail: false, queued: false, ...overrides,
 });
 
 function store(overrides: Partial<AutopilotStore> = {}): AutopilotStore {
@@ -49,11 +49,11 @@ describe("runAdvanceStep", () => {
         version({ versionId: "audio-running", hasTtsJob: true }),
         version({ versionId: "audio-done", hasTtsJob: true, hasAudio: true }),
         version({ versionId: "video-running", hasTtsJob: true, hasAudio: true, hasRenderJob: true }),
-        version({ versionId: "video-done", hasTtsJob: true, hasAudio: true, hasRenderJob: true, hasVideo: true }),
+        version({ versionId: "video-done", hasTtsJob: true, hasAudio: true, hasRenderJob: true, hasVideo: true, hasThumbnail: true }),
         version({ versionId: "queued", hasVideo: true, queued: true }),
       ],
     });
-    expect(await runAdvanceStep(s)).toEqual({ tts: 1, render: 1, published: 1, errors: [] });
+    expect(await runAdvanceStep(s)).toEqual({ tts: 1, render: 1, published: 1, missingCover: 0, errors: [] });
     expect(s.enqueueJob).toHaveBeenCalledWith("new", "tts");
     expect(s.enqueueJob).toHaveBeenCalledWith("audio-done", "render");
     expect(s.queuePublic).toHaveBeenCalledWith("video-done");
@@ -66,7 +66,16 @@ describe("runAdvanceStep", () => {
         if (id === "a") throw new Error("autopilot_enqueue_tts:P0001 <script>");
       }),
     });
-    expect(await runAdvanceStep(s)).toEqual({ tts: 1, render: 0, published: 0, errors: ["autopilot_enqueue_tts:P0001 script"] });
+    expect(await runAdvanceStep(s)).toEqual({ tts: 1, render: 0, published: 0, missingCover: 0, errors: ["autopilot_enqueue_tts:P0001 script"] });
+  });
+
+  it("never queues a video without its cover", async () => {
+    const s = store({
+      freshApprovedVersions: async () => [version({ versionId: "no-cover", hasTtsJob: true, hasAudio: true, hasRenderJob: true, hasVideo: true })],
+    });
+    expect(await runAdvanceStep(s)).toEqual({ tts: 0, render: 0, published: 0, missingCover: 1, errors: [] });
+    expect(s.queuePublic).not.toHaveBeenCalled();
+    expect(s.enqueueJob).not.toHaveBeenCalled();
   });
 });
 
