@@ -221,6 +221,23 @@ describe("runIngest", () => {
     expect(report.ranked).toHaveLength(1);
     expect(report.ranked[0]).toMatchObject({ independentSources: 2, eligible: true });
     expect(report.candidates).toBe(1);
+    expect(store.ingestRuns).toEqual([report.run]);
+    expect(report.run).toMatchObject({ sourcesTotal: 3, sourcesFailed: 1, itemsSeen: 2, newArticles: 2, eventsSaved: 1, candidates: 1 });
+  });
+
+  it("counts items dropped before saving, by reason", async () => {
+    const items = [
+      `<item><title>Senza data</title><link>https://site.it/a</link><description>x</description></item>`,
+      `<item><title>Vecchia</title><link>https://site.it/b</link><description>x</description><pubDate>Thu, 01 Oct 2026 18:00:00 GMT</pubDate></item>`,
+      `<item><title>${headline}</title><link>https://site.it/c</link><description>${headline}</description><pubDate>Thu, 05 Nov 2026 18:00:00 GMT</pubDate></item>`,
+      `<item><title>${headline}</title><link>https://site.it/c</link><description>${headline}</description><pubDate>Thu, 05 Nov 2026 18:00:00 GMT</pubDate></item>`,
+    ].join("");
+    const fetchMixed = vi.fn(async () => new Response(`<rss><channel>${items}</channel></rss>`, { status: 200 })) as unknown as typeof fetch;
+    const store = new MemoryStore([source("ansa")]);
+    const report = await runIngest(store, NOW, fetchMixed);
+    expect(report.run).toMatchObject({ itemsSeen: 4, droppedUndated: 1, droppedOutOfWindow: 1, droppedBadUrl: 0, droppedDuplicate: 1, newArticles: 1 });
+    const again = await runIngest(store, NOW, fetchMixed);
+    expect(again.run).toMatchObject({ alreadyStored: 1, newArticles: 0 });
   });
 
   it("is idempotent: a second run adds nothing", async () => {

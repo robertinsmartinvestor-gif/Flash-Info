@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { FormatId } from "@/src/editorial/formats";
 import type { Article, EventSnapshot, EventStatus, NewsSource, RankedEvent } from "@/src/news/types";
 import type { UsageRecord } from "@/src/providers/types";
-import type { CandidateBundle, EditorialStore, FetchStatus, ScriptVersionInput } from "./types";
+import type { CandidateBundle, EditorialStore, FetchStatus, IngestRun, ScriptVersionInput } from "./types";
 
 interface SourceRow {
   id: string;
@@ -104,6 +104,25 @@ export class SupabaseStore implements EditorialStore {
       default_category: source.defaultCategory ?? null,
     }));
     unwrap(await this.client.from("news_sources").upsert(rows, { onConflict: "slug" }), "sync_sources");
+  }
+
+  async recordIngestRun(run: IngestRun): Promise<void> {
+    unwrap(
+      await this.client.from("ingest_runs").insert({
+        sources_total: run.sourcesTotal,
+        sources_failed: run.sourcesFailed,
+        items_seen: run.itemsSeen,
+        dropped_undated: run.droppedUndated,
+        dropped_out_of_window: run.droppedOutOfWindow,
+        dropped_bad_url: run.droppedBadUrl,
+        dropped_duplicate: run.droppedDuplicate,
+        already_stored: run.alreadyStored,
+        new_articles: run.newArticles,
+        events_saved: run.eventsSaved,
+        candidates: run.candidates,
+      }),
+      "record_ingest_run",
+    );
   }
 
   async recordFetch(sourceId: string, status: FetchStatus): Promise<void> {

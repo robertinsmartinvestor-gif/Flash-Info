@@ -43,35 +43,91 @@ Variabili d'ambiente: `OGNIORA_SUPABASE_URL`, `OGNIORA_NOTIFY_WEBHOOK`.
 
 ## Studio
 
-### Riepilogo pubblico
+### Sito pubblico e riepilogo
 
-La home page pubblica mostra solo le schede pubblicate nella tabella digest_items.
-La tabella ha una policy RLS di sola lettura per i visitatori anonimi; articoli
-grezzi, candidati e script restano leggibili solo allo staff.
+**Cosa vede il pubblico.** La home (`/`) e le schede (`/notizie/<slug>`) sono renderizzate
+sul server da Next (ISR, 60 secondi) leggendo `digest_items` con la sola chiave anonima.
+Anon legge solo le schede pubblicate e solo le colonne pubbliche (grant per colonna:
+niente `reviewed_by`, `event_id`, stato); articoli grezzi, candidati, script, funnel e
+`ingest_runs` restano leggibili solo allo staff. Pagine editoriali: `/chi-siamo`,
+`/metodo`, `/correzioni`, `/contatti`, `/privacy`. Ci sono anche `sitemap.xml` (schede
+pubblicate con `lastmod` = aggiornamento o pubblicazione) e `robots.txt`.
 
-In **Studio → Riepilogo** sono proposti gli eventi delle ultime 24 ore che non sono
-stati scelti dal pilota per lo Short, hanno almeno due gruppi di fonti e non hanno
-già una scheda. L'admin apre le fonti originali, scrive titolo e sintesi originali,
-controlla l'anteprima e pubblica. La RPC publish_digest_item ricontrolla ruolo,
-freschezza, candidato ancora proposto, assenza di script e due gruppi di fonti;
-sceglie da sola i link dagli articoli del cluster e registra l'azione in audit_logs.
-Uno script bloccato dal QC non entra in questo percorso. L'admin può correggere
-una scheda pubblicata con amend_digest_item (data dell'aggiornamento visibile e
-azione in audit_logs) o ritirarla con retract_digest_item; una scheda ritirata
-non viene più mostrata al pubblico.
+**Permalink.** Lo slug è `AAAA-MM-GG-titolo-xxxxxx` (data di Roma, titolo senza accenti,
+6 caratteri dell'id). Viene creato alla pubblicazione e non cambia con le correzioni.
 
-**Panoramica** mostra il conteggio delle ultime 24 ore: eventi, eventi esclusi per
-una sola fonte o basso valore, candidati non scelti, script bloccati e schede
-pubblicate. La ragione di esclusione viene registrata sui nuovi eventi a partire
-dalla migrazione; quelli raccolti prima non sono classificati retroattivamente.
-Gli elementi RSS senza data valida o oltre 72 ore vengono scartati prima del DB
-e quindi non entrano in questi conteggi.
+**Dati dell'editore.** `src/public/site-info.ts` contiene i campi che solo il titolare può
+fornire (editore, sede, P.IVA/CF, responsabile, registrazione, email, titolare privacy,
+hosting e log). Finché ne manca uno, il sito mostra il segnaposto "[Da completare dal
+titolare: ...]" e una fascia "Sito in anteprima", resta `noindex` e `robots.txt` blocca
+tutto. Si compilano con una PR, mai inventati.
 
-Il sito usa la stessa app Next e le variabili pubbliche NEXT_PUBLIC_SUPABASE_URL e
-NEXT_PUBLIC_SUPABASE_ANON_KEY. La lettura client-side è adatta al primo esperimento
-con traffico diretto; prima di puntare sulla ricerca organica occorre rendere le
-schede disponibili nell'HTML iniziale e aggiungere URL permanenti per le notizie.
-La migrazione non inserisce schede e non avvia pubblicazioni da sola.
+**Percorso editoriale.** In **Studio → Riepilogo** compaiono i candidati `proposed` il cui
+evento è stato visto nelle ultime 24 ore, con due gruppi di fonti https e nessuno
+script. L'admin apre le fonti e scrive titolo e sintesi originali; lo Studio segnala
+subito le frasi riprese. `publish_digest_item` ricontrolla tutto nel database:
+
+- ruolo admin;
+- evento fresco e non archiviato;
+- candidato ancora `proposed`;
+- **nessuno script di alcuno stato**, quindi uno script bloccato o trattenuto non arriva
+  mai sul sito;
+- almeno due gruppi editoriali con URL https;
+- lunghezze;
+- anti-copia: il titolo non può coincidere con un titolo fonte né condividerne 6 parole
+  di fila; la sintesi non può condividere 8 parole di fila con titoli o descrizioni RSS.
+
+I link alle fonti li sceglie il database, uno per gruppo. Ogni azione finisce in
+`audit_logs`.
+
+**Correzione e ritiro.**
+
+- `amend_digest_item` richiede una nota pubblica, che compare sulla scheda e in `/correzioni`
+  con la data, e ripete l'anti-copia.
+- `retract_digest_item` richiede un motivo pubblico. Il testo sparisce da home, scheda e
+  sitemap; all'indirizzo resta solo l'avviso con date e motivo, letto con
+  `digest_retractions()`, che non espone mai titolo o sintesi.
+- Lo Studio chiama `/api/revalidate-digest` con il token dell'admin, verificato da
+  Supabase, per svuotare subito la cache. Se la chiamata fallisce, la modifica appare
+  entro 60 secondi.
+
+**Funnel (Panoramica).** La vista `editorial_funnel_24h` mostra le ultime 24 ore:
+
+- raccolta: voci lette, scartate prima del DB per assenza di data, fuori finestra
+  (oltre 72 h o nel futuro), URL non validi o doppioni, e articoli nuovi;
+- eventi esclusi: una sola fonte, basso valore, oppure senza motivo registrato perché
+  salvati prima della migrazione;
+- candidati idonei non scelti, script bloccati dal QC, script trattenuti dal pilota
+  (`script.auto_held`) e schede pubblicate.
+
+Gli scarti e i motivi di esclusione esistono solo dall'applicazione della migrazione
+(`metric_tracking`). Per le prime 24 ore lo Studio li segna come "parziale".
+
+**Variabili.** Il sito usa `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`, già
+presenti, e `OGNIORA_SITE_URL` (origine canonica https, opzionale: senza, vale il dominio
+di produzione Vercel). Nessuna chiave privata sul sito.
+
+**Limiti.**
+
+- Un ritiro risponde 200 con `noindex`, non 410.
+- La cache di Vercel può servire la versione precedente per al massimo 60 s se la
+  revalidazione fallisce.
+- L'anti-copia confronta solo titoli e descrizioni RSS, non il testo integrale degli
+  articoli, che non viene salvato.
+- Il funnel conta gli eventi per data di creazione.
+
+**Rollback.** Revert della PR: il sito torna al redirect verso `/studio`. La migrazione
+aggiunge solo oggetti nuovi e una colonna nullable. Se serve toglierli:
+
+```sql
+drop view editorial_funnel_24h;
+drop function digest_retractions, publish_digest_item, amend_digest_item, retract_digest_item;
+drop table digest_items, ingest_runs, metric_tracking;
+alter table news_events drop column ineligible_reason;
+```
+
+Poi si eliminano le funzioni `private.digest_copy_reason`, `ngrams`, `slugify` e
+`fold_words`. I dati delle schede si perdono: esportali prima.
 
 ### Pagine dello Studio
 
@@ -79,7 +135,7 @@ La migrazione non inserisce schede e non avvia pubblicazioni da sola.
 
 - **Panoramica:** interruttore del pilota, spesa del mese sul tetto, numeri della pipeline, ultimi video e attività.
 - **Revisione:** script da rivedere, approvati e bloccati, con i passi audio → video → YouTube.
-- **Riepilogo:** eventi idonei non scelti per il video, con verifica e pubblicazione manuale sul sito.
+- **Riepilogo:** eventi idonei non scelti per il video, con verifica, pubblicazione, correzione e ritiro delle schede del sito.
 - **Pubblicazioni:** ogni voce della coda YouTube, con stato e visibilità.
 - **Impostazioni:** regole del pilota, spesa, produzione, conservazione e voce. Solo gli admin modificano.
 
