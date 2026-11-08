@@ -130,7 +130,10 @@ export interface YoutubeApi {
 /** A short, public-log-safe code for an API error: HTTP status and Google's reason, never a message body. */
 export function apiErrorCode(prefix: string, error: unknown): string {
   const status = (error as { code?: unknown; status?: unknown }).code ?? (error as { status?: unknown }).status;
-  const reason = (error as { errors?: Array<{ reason?: unknown }> }).errors?.[0]?.reason;
+  // googleapis puts Google's reason in response.data.error.errors; older clients and tests put it on the error.
+  type Reasons = { errors?: Array<{ reason?: unknown }> };
+  const body = (error as { response?: { data?: { error?: Reasons } } }).response?.data?.error;
+  const reason = (error as Reasons).errors?.[0]?.reason ?? body?.errors?.[0]?.reason;
   const clean = (value: unknown) => String(value ?? "").replace(/[^\w.-]/g, "").slice(0, 40);
   return [prefix, clean(status), clean(reason)].filter(Boolean).join(":");
 }
