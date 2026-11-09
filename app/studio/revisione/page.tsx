@@ -146,8 +146,12 @@ function PublicationStep({ item, publication, ready, onDone }: { item: ReviewIte
   );
 }
 
-function Detail({ item, production, onDone }: { item: ReviewItem; production: Production; onDone: (message: string) => void }) {
+const VERDICT: Record<string, string> = { pass: "superata", needs_review: "da rivedere", blocked: "bloccata" };
+
+function Detail({ item: initial, production, onDone }: { item: ReviewItem; production: Production; onDone: (message: string) => void }) {
   const { client } = useStudio();
+  const [versionId, setVersionId] = useState(initial.versionId);
+  const item = initial.versions.find((entry) => entry.versionId === versionId) ?? initial;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -174,6 +178,16 @@ function Detail({ item, production, onDone }: { item: ReviewItem; production: Pr
         <Badge tone={status?.tone}>{status?.label ?? item.status}</Badge>
         <span className="faint">v{item.version} · circa {Math.round(item.estimatedSeconds)} s · {formatWhen(item.createdAt)}</span>
       </div>
+      {item.versions.length > 1 && item.status !== "approved" && (
+        <div className="filters" role="group" aria-label="Versioni dello script">
+          {item.versions.map((entry) => (
+            <button key={entry.versionId} type="button" className="chip" aria-pressed={entry.versionId === item.versionId}
+              onClick={() => { setVersionId(entry.versionId); setNote(""); setError(""); }}>
+              v{entry.version} · {VERDICT[entry.qcVerdict] ?? entry.qcVerdict}
+            </button>
+          ))}
+        </div>
+      )}
       <h2>{item.draft?.title ?? "Script senza titolo"}</h2>
       {item.draft && <p className="muted" style={{ marginTop: 0 }}>{item.draft.summary}</p>}
 
@@ -237,7 +251,7 @@ export default function ReviewPage() {
 
   const load = useCallback(async () => {
     const [scripts, versions, jobs, assets, queue, uploads] = await Promise.all([
-      client.from("scripts").select("id, status, format").order("created_at", { ascending: false }).limit(50),
+      client.from("scripts").select("id, status, format, approved_version_id").order("created_at", { ascending: false }).limit(50),
       client.from("script_versions").select(VERSION_FIELDS).order("created_at", { ascending: false }).limit(200),
       client.from("production_jobs").select("script_version_id, kind, status, error_code").in("kind", ["tts", "render"]).limit(200),
       client.from("media_assets").select("script_version_id, kind, storage_path").in("kind", ["audio", "video"]).is("deleted_at", null).order("created_at").limit(200),
