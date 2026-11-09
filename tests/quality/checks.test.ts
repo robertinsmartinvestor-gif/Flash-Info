@@ -90,6 +90,17 @@ describe("runQualityChecks", () => {
     expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, riferisce ANSA." }))).not.toContain("name_not_in_source");
   });
 
+  it("does not read the digits of a cited publisher's name as a figure", () => {
+    const pack = PACK.map((item) => (item.evidenceId === "E1" ? { ...item, publisher: "TGCom24" } : item));
+    const quiet = (text: string) => runQualityChecks(withSentence({ text }), pack, flash, NOW).findings.map((finding) => finding.check);
+    expect(quiet("Il Consiglio dei ministri ha deciso, secondo TGCom24.")).not.toContain("number_not_in_source");
+    expect(quiet("Il Consiglio dei ministri ha deciso, secondo tgcom24.")).not.toContain("number_not_in_source");
+    // A real figure next to the name is still checked.
+    expect(quiet("Secondo TGCom24 il Consiglio dei ministri ha impugnato 24 leggi.")).toContain("number_not_in_source");
+    // The name of a source that is not cited still counts.
+    expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, secondo TGCom24." }))).toContain("number_not_in_source");
+  });
+
   it("still blocks the publisher of a source that is not cited", () => {
     expect(checks(withSentence({ text: "Il Consiglio dei ministri ha deciso, riferisce la Rai." }))).toContain("name_not_in_source");
   });
