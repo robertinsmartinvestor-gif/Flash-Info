@@ -59,6 +59,16 @@ function extractProperNouns(text: string): string[] {
     .filter((word) => !WEEKDAY_OR_MONTH.has(word));
 }
 
+/** Removes the names of the cited publishers, in any case, so their digits are not read as figures. */
+function withoutPublishers(text: string, cited: EvidenceItem[]): string {
+  return cited.reduce((current, item) => {
+    const name = item.publisher.trim();
+    if (!name) return current;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return current.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu"), " ");
+  }, text);
+}
+
 function evidenceText(item: EvidenceItem): string {
   return comparable(`${item.title} ${item.summary}`);
 }
@@ -96,7 +106,8 @@ function checkSentence(sentence: ScriptSentence, index: number, byId: Map<string
   // The publisher of a cited source can be named: "secondo la Rai" is an attribution.
   const support = cited.map((item) => `${comparable(item.publisher)} ${evidenceText(item)}`).join(" ");
   const supportNumbers = new Set(extractNumbers(cited.map((item) => `${item.title} ${item.summary}`).join(" ")));
-  for (const number of extractNumbers(sentence.text)) {
+  // "secondo TGCom24" names a cited source: the digits of its name are not a figure to verify.
+  for (const number of extractNumbers(withoutPublishers(sentence.text, cited))) {
     if (!supportNumbers.has(number)) add("number_not_in_source", "blocker", `Il numero ${number} non compare nelle fonti citate.`);
   }
   for (const noun of extractProperNouns(sentence.text)) {
