@@ -48,15 +48,33 @@ function extractNumbers(text: string): string[] {
   return (text.match(/\d+(?:[.,]\d+)*/g) ?? []).map((value) => value.replace(/[.,](?=\d{3}\b)/g, "").replace(",", "."));
 }
 
-/** Capitalized words after the first of a sentence: a cheap detector of names the model introduced. */
+/**
+ * Common nouns that Italian capitalizes for institutions or groups ("il Governo",
+ * "i Paesi"). They are not names the model can invent, so they are not checked.
+ */
+const GENERIC_CAPITALIZED = new Set([
+  "paese", "paesi", "stato", "stati", "governo", "consiglio", "ministero", "ministro", "ministri", "presidente",
+  "premier", "parlamento", "camera", "senato", "comune", "regione", "regioni", "provincia", "procura", "tribunale",
+  "borsa", "polizia", "carabinieri", "esercito", "nazione", "nazioni", "capitale",
+].map(foldText));
+
+/**
+ * Capitalized words that do not open a sentence: a cheap detector of names the
+ * model introduced. The first word after . ! ? : ; or a quote is skipped, so a
+ * capitalized verb or "Secondo" at the start of a sentence is not a name.
+ */
 function extractProperNouns(text: string): string[] {
   // Apostrophes split words, so "dall'Unione" yields "Unione".
-  const words = text.match(/\p{L}[\p{L}-]*/gu) ?? [];
-  return words
-    .slice(1)
-    .filter((word) => /^\p{Lu}/u.test(word) && word.length > 2)
-    .map((word) => comparable(word))
-    .filter((word) => !WEEKDAY_OR_MONTH.has(word));
+  const nouns: string[] = [];
+  for (const clause of text.split(/[.!?:;\n"«»“”]+/u)) {
+    const words = clause.match(/\p{L}[\p{L}-]*/gu) ?? [];
+    for (const word of words.slice(1)) {
+      if (!/^\p{Lu}/u.test(word) || word.length <= 2) continue;
+      const folded = comparable(word);
+      if (!WEEKDAY_OR_MONTH.has(folded) && !GENERIC_CAPITALIZED.has(folded)) nouns.push(folded);
+    }
+  }
+  return nouns;
 }
 
 /** Removes the names of the cited publishers, in any case, so their digits are not read as figures. */
@@ -74,6 +92,10 @@ function evidenceText(item: EvidenceItem): string {
 }
 
 function checkSentence(sentence: ScriptSentence, index: number, byId: Map<string, EvidenceItem>, now: Date): QcFinding[] {
+  // The text of every source gathered for the story: a name found there was not
+  // invented. Publishers are left out, so "secondo la Rai" without citing the Rai
+  // stays a blocker.
+  const packText = [...byId.values()].map((item) => evidenceText(item)).join(" ");
   const findings: QcFinding[] = [];
   const add = (check: string, severity: Severity, message: string) => findings.push({ check, severity, message, sentence: index });
 
@@ -111,7 +133,11 @@ function checkSentence(sentence: ScriptSentence, index: number, byId: Map<string
     if (!supportNumbers.has(number)) add("number_not_in_source", "blocker", `Il numero ${number} non compare nelle fonti citate.`);
   }
   for (const noun of extractProperNouns(sentence.text)) {
-    if (!support.includes(noun)) add("name_not_in_source", "blocker", `"${noun}" non compare nelle fonti citate.`);
+    if (support.includes(noun)) continue;
+    // In another source of the same story: not invented, but cited from the wrong
+    // source. A warning, and the semantic verifier still checks the claim.
+    if (packText.includes(noun)) add("name_in_other_source", "warning", `"${noun}" compare in una fonte della notizia non citata in questa frase.`);
+    else add("name_not_in_source", "blocker", `"${noun}" non compare nelle fonti citate.`);
   }
 
   const relative = foldText(sentence.text).match(RELATIVE_DAYS)?.[1];
@@ -124,7 +150,9 @@ function checkSentence(sentence: ScriptSentence, index: number, byId: Map<string
   }
 
   if (sentence.kind === "interpretation" && !ATTRIBUTION.test(foldText(sentence.text))) {
-    add("interpretation_unattributed", "blocker", "Interpretazione senza attribuzione esplicita.");
+    // A warning, not a blocker: the sentence still cites a verbatim quote and the
+    // semantic verifier checks that the sources support it.
+    add("interpretation_unattributed", "warning", "Interpretazione senza attribuzione esplicita.");
   }
   return findings;
 }

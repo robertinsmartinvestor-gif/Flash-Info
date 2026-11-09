@@ -67,6 +67,24 @@ describe("runQualityChecks", () => {
     expect(checks(withSentence({ text: "La decisione è stata presa dall'Unione europea." }))).toContain("name_not_in_source");
   });
 
+  it("does not take the first word of a sentence or a common capitalized noun for a name", () => {
+    const quiet = checks(withSentence({ text: "Il Consiglio dei ministri ha deciso. Secondo i Paesi vicini è un caso. Nascerebbe un caso: Impugnata la legge." }));
+    expect(quiet).not.toContain("name_not_in_source");
+  });
+
+  it("only warns about a name found in another source of the same story", () => {
+    const report = run(withSentence({ text: "Il Consiglio dei ministri ha deciso, Zaia compreso." }));
+    expect(report.findings.map((finding) => finding.check)).toContain("name_in_other_source");
+    expect(report.findings.map((finding) => finding.check)).not.toContain("name_not_in_source");
+    expect(report.verdict).not.toBe("blocked");
+  });
+
+  it("only warns about an unattributed interpretation, which the verifier still checks", () => {
+    const report = run(withSentence({ kind: "interpretation", text: "Ne nascerebbe un caso per la legge regionale." }));
+    expect(report.findings.find((finding) => finding.check === "interpretation_unattributed")?.severity).toBe("warning");
+    expect(report.verdict).not.toBe("blocked");
+  });
+
   it("blocks facts disguised as connective text", () => {
     expect(checks(withSentence({ kind: "connective", evidence: [], text: "Intanto Meloni resta in silenzio." }))).toContain("connective_has_facts");
     expect(checks(withSentence({ kind: "connective", evidence: [], text: "Sono 40 i voti." }))).toContain("connective_has_facts");
