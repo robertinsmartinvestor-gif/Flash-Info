@@ -28,6 +28,26 @@ describe("buildReviewItems", () => {
     expect(item?.findings).toHaveLength(1);
   });
 
+  it("shows the newest version a person can approve, not a later blocked attempt", () => {
+    const [item] = buildReviewItems([script("u", "blocked")], [
+      version("u", 1, { qc_verdict: "blocked" }),
+      version("u", 2, { qc_verdict: "needs_review" }),
+      version("u", 3, { qc_verdict: "blocked" }),
+    ]);
+    expect(item?.versionId).toBe("u-v2");
+    expect(item?.versions.map((entry) => entry.version)).toEqual([1, 2, 3]);
+    expect(canApprove(item!)).toBe(true);
+    expect(canApprove(item!.versions[2]!)).toBe(false);
+  });
+
+  it("falls back to the newest version when all are blocked, and shows the approved one when there is one", () => {
+    const [blocked] = buildReviewItems([script("b", "blocked")], [version("b", 1, { qc_verdict: "blocked" }), version("b", 2, { qc_verdict: "blocked" })]);
+    expect(blocked?.versionId).toBe("b-v2");
+    expect(canApprove(blocked!)).toBe(false);
+    const [approved] = buildReviewItems([{ ...script("a", "approved"), approved_version_id: "a-v1" }], [version("a", 1, { qc_verdict: "pass" }), version("a", 2)]);
+    expect(approved?.versionId).toBe("a-v1");
+  });
+
   it("puts what needs a person first", () => {
     const items = buildReviewItems(
       [script("a", "approved"), script("b", "blocked"), script("c", "in_review")],
@@ -53,6 +73,8 @@ describe("review actions", () => {
     expect(canApprove(item("in_review", "needs_review"))).toBe(true);
     expect(canApprove(item("in_review", "blocked"))).toBe(false);
     expect(canApprove(item("blocked", "blocked"))).toBe(false);
+    // The pilot marks a script blocked when its last attempt is; an earlier reviewable version stays approvable.
+    expect(canApprove(item("blocked", "needs_review"))).toBe(true);
     expect(canApprove(item("approved", "pass"))).toBe(false);
     expect(canApprove(item("rejected", "pass"))).toBe(false);
   });

@@ -5,6 +5,7 @@ export interface ScriptRow {
   id: string;
   status: string;
   format: string;
+  approved_version_id?: string | null;
 }
 
 export interface VersionRow {
@@ -34,6 +35,8 @@ export interface ReviewItem {
   draft: ScriptDraft | null;
   evidence: EvidenceItem[];
   findings: QcFinding[];
+  /** Every version of the script, oldest first: the pilot writes up to three attempts. */
+  versions: ReviewItem[];
 }
 
 const STATUS_ORDER = ["in_review", "draft", "blocked", "approved", "rejected"];
@@ -53,31 +56,51 @@ function findingsOf(report: unknown): QcFinding[] {
   return Array.isArray(findings) ? (findings as QcFinding[]) : [];
 }
 
-/** One row per script, on its latest version, with what still needs a person first. */
+function toItem(script: ScriptRow, row: VersionRow): ReviewItem {
+  const draft = storedDraftSchema.safeParse(row.content);
+  return {
+    scriptId: script.id,
+    versionId: row.id,
+    version: row.version,
+    status: script.status,
+    format: script.format,
+    qcVerdict: row.qc_verdict,
+    estimatedSeconds: Number(row.estimated_seconds),
+    narration: row.narration,
+    createdAt: row.created_at,
+    draft: draft.success ? draft.data : null,
+    evidence: Array.isArray(row.evidence) ? (row.evidence as EvidenceItem[]) : [],
+    findings: findingsOf(row.qc_report),
+    versions: [],
+  };
+}
+
+/**
+ * One row per script, with what still needs a person first. The version shown is the
+ * approved one; otherwise the newest that is not blocked, because a later blocked
+ * attempt must not hide an earlier one a person can still approve; otherwise the newest.
+ */
 export function buildReviewItems(scripts: ScriptRow[], versions: VersionRow[]): ReviewItem[] {
   const items: ReviewItem[] = [];
   for (const script of scripts) {
-    const latest = versions.filter((row) => row.script_id === script.id).sort((a, b) => b.version - a.version)[0];
-    if (!latest) continue;
-    const draft = storedDraftSchema.safeParse(latest.content);
-    items.push({
-      scriptId: script.id,
-      versionId: latest.id,
-      version: latest.version,
-      status: script.status,
-      format: script.format,
-      qcVerdict: latest.qc_verdict,
-      estimatedSeconds: Number(latest.estimated_seconds),
-      narration: latest.narration,
-      createdAt: latest.created_at,
-      draft: draft.success ? draft.data : null,
-      evidence: Array.isArray(latest.evidence) ? (latest.evidence as EvidenceItem[]) : [],
-      findings: findingsOf(latest.qc_report),
-    });
+    const all = versions.filter((row) => row.script_id === script.id).sort((a, b) => a.version - b.version).map((row) => toItem(script, row));
+    if (all.length === 0) continue;
+    for (const entry of all) entry.versions = all;
+    const newestFirst = [...all].reverse();
+    const shown = all.find((entry) => entry.versionId === script.approved_version_id)
+      ?? newestFirst.find((entry) => entry.qcVerdict !== "blocked")
+      ?? newestFirst[0]!;
+    items.push(shown);
   }
   const rank = (item: ReviewItem) => (STATUS_ORDER.indexOf(item.status) + 1 || STATUS_ORDER.length + 1);
   return items.sort((a, b) => rank(a) - rank(b) || b.createdAt.localeCompare(a.createdAt));
 }
 
-export const canApprove = (item: ReviewItem) => item.qcVerdict !== "blocked" && (item.status === "in_review" || item.status === "draft");
+/**
+ * A version can be approved when it is not blocked and the script is still open. A
+ * script the pilot marked blocked stays open: approve_script_version accepts any
+ * version that is not blocked, so a person can pick an earlier, reviewable attempt.
+ */
+export const canApprove = (item: ReviewItem) =>
+  item.qcVerdict !== "blocked" && (item.status === "in_review" || item.status === "draft" || item.status === "blocked");
 export const canReject = (item: ReviewItem) => item.status !== "rejected";
