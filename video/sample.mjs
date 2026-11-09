@@ -41,3 +41,13 @@ for (const [index, visual] of visuals.entries()) {
   const cover = await renderCover({ spec: { ...coverSpec, visual, seed: coverSpec.seed + index * 7919 }, outputPath: join(out, name) });
   console.log(JSON.stringify({ cover: name, ...cover }));
 }
+
+// Edge cases the template must handle: no qualifier (the most common case) and the longest headline allowed.
+const edgeCases = [
+  { name: "sample-cover-no-qualifier.png", qualifier: "" },
+  { name: "sample-cover-long.png", headline: "Testo inventato di prova molto lungo per la copertina", qualifier: "SECONDO LE FONTI", subline: "Una riga di prova inventata che arriva vicino al limite" },
+];
+for (const { name, ...overrides } of edgeCases) {
+  const cover = await renderCover({ spec: { ...coverSpec, ...overrides }, outputPath: join(out, name) });
+  console.log(JSON.stringify({ cover: name, ...cover }));
+}

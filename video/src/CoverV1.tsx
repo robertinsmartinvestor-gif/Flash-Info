@@ -28,6 +28,7 @@ const TEXT_BOTTOM = 1920 * 0.8;
 const HEADLINE_TOP = 250;
 const HEADLINE_MAX_HEIGHT = 640;
 const MIN_HEADLINE_SIZE = 70;
+const LOWER_MAX_HEIGHT = 300;
 
 const fonts = Promise.all([
   loadFont({ family: FONT, url: inter500, weight: "500" }),
@@ -39,8 +40,15 @@ const fonts = Promise.all([
 /** Deterministic variation from the seed: a fraction in [0, 1). */
 const pick = (seed: number, salt: number) => ((Math.imul(seed ^ salt, 2654435761) >>> 0) % 10_000) / 10_000;
 
-function overflows(element: HTMLElement | null): boolean {
-  return !!element && (element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1);
+/**
+ * True when the text does not fit: a word wider than the box, or lines taller than
+ * the allowed height. Heights come from the line boxes (offsetHeight), not from
+ * scrollHeight: with line-height 1 the glyphs of the last line poke a few pixels
+ * past their line box, and scrollHeight counted that as clipped text, so every
+ * headline without a qualifier below it failed at every size.
+ */
+function overflows(element: HTMLElement | null, maxHeight: number): boolean {
+  return !!element && (element.scrollWidth > element.clientWidth + 1 || element.offsetHeight > maxHeight);
 }
 
 function Clock({ size }: { size: number }) {
@@ -72,12 +80,12 @@ export function CoverV1(props: CoverProps) {
 
   useLayoutEffect(() => {
     if (!ready) return;
-    if (overflows(headline.current)) {
+    if (overflows(headline.current, HEADLINE_MAX_HEIGHT)) {
       if (size - 6 < MIN_HEADLINE_SIZE) cancelRender(new Error("cover_text_overflow"));
       else setSize(size - 6);
       return;
     }
-    if (overflows(lower.current)) {
+    if (overflows(lower.current, LOWER_MAX_HEIGHT)) {
       cancelRender(new Error("cover_text_overflow"));
       return;
     }
@@ -124,7 +132,7 @@ export function CoverV1(props: CoverProps) {
       <div
         ref={headline}
         style={{
-          position: "absolute", top: HEADLINE_TOP, left: SIDE.left, width: textWidth, maxHeight: HEADLINE_MAX_HEIGHT, overflow: "hidden",
+          position: "absolute", top: HEADLINE_TOP, left: SIDE.left, width: textWidth,
           color: "#fff", fontSize: size, fontWeight: 900, lineHeight: 1.0, letterSpacing: -2, textTransform: "uppercase",
           wordBreak: "keep-all", overflowWrap: "normal", hyphens: "none", textShadow: "0 6px 30px rgba(0,0,0,0.6)",
         }}
@@ -141,7 +149,7 @@ export function CoverV1(props: CoverProps) {
 
       <div
         ref={lower}
-        style={{ position: "absolute", left: SIDE.left, width: textWidth, bottom: 1920 - TEXT_BOTTOM, maxHeight: 300, overflow: "hidden", color: "#fff" }}
+        style={{ position: "absolute", left: SIDE.left, width: textWidth, bottom: 1920 - TEXT_BOTTOM, color: "#fff" }}
       >
         {props.subline && (
           <div style={{ display: "flex", gap: 22, alignItems: "stretch", fontSize: 50, fontWeight: 500, lineHeight: 1.18, textShadow: "0 3px 16px rgba(0,0,0,0.7)" }}>
