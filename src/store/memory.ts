@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FormatId } from "@/src/editorial/formats";
 import type { Article, EventSnapshot, NewsSource, RankedEvent } from "@/src/news/types";
 import type { UsageRecord } from "@/src/providers/types";
-import type { CandidateBundle, EditorialStore, FetchStatus, ScriptVersionInput } from "./types";
+import type { CandidateBundle, EditorialStore, FetchStatus, IngestRun, ScriptVersionInput } from "./types";
 
 /** In-memory store for tests and `--dry-run`: nothing leaves the process. */
 export class MemoryStore implements EditorialStore {
@@ -12,6 +12,7 @@ export class MemoryStore implements EditorialStore {
   readonly versions: ScriptVersionInput[] = [];
   readonly usage: UsageRecord[] = [];
   readonly fetches = new Map<string, FetchStatus>();
+  readonly ingestRuns: IngestRun[] = [];
 
   constructor(private readonly sources: NewsSource[] = []) {}
 
@@ -21,6 +22,10 @@ export class MemoryStore implements EditorialStore {
 
   async recordFetch(sourceId: string, status: FetchStatus) {
     this.fetches.set(sourceId, status);
+  }
+
+  async recordIngestRun(run: IngestRun) {
+    this.ingestRuns.push(run);
   }
 
   async insertArticles(articles: Article[]) {

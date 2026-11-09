@@ -240,3 +240,5 @@ table.table { width: 100%; border-collapse: collapse; }
 .signin { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .signin .card { width: min(380px, 100%); padding: 28px; }
 .signin .brand { color: var(--text); padding: 0; margin-bottom: 20px; font-size: 22px; }
+.warn-text { color: var(--bad); font-size: 13px; margin: 4px 0; }
+.funnel-step { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 18px 0 10px; font-size: 14px; }

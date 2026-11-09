@@ -33,9 +33,25 @@ export interface ScriptVersionInput {
   model: string;
 }
 
+export interface IngestRun {
+  sourcesTotal: number;
+  sourcesFailed: number;
+  itemsSeen: number;
+  droppedUndated: number;
+  droppedOutOfWindow: number;
+  droppedBadUrl: number;
+  droppedDuplicate: number;
+  alreadyStored: number;
+  newArticles: number;
+  eventsSaved: number;
+  candidates: number;
+}
+
 export interface EditorialStore extends UsageLedger {
   listSources(): Promise<NewsSource[]>;
   recordFetch(sourceId: string, status: FetchStatus): Promise<void>;
+  /** Stores the counters of one ingest run, including what was dropped before saving. */
+  recordIngestRun(run: IngestRun): Promise<void>;
   /** Inserts what is new, ignoring known URLs, and returns only the new rows. */
   insertArticles(articles: Article[]): Promise<Article[]>;
   loadRecentEvents(sinceIso: string): Promise<EventSnapshot[]>;

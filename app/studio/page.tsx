@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { coverage, type Funnel, toFunnel } from "@/src/editorial/funnel";
 import { useCallback, useEffect, useState } from "react";
 import { formatWhen, usd, useStudio } from "./shared";
 import { Badge, PageHead, PRIVACY, Stat, StatusLine, Switch, type Tone, YOUTUBE_ID } from "./ui";
@@ -15,6 +16,7 @@ interface Overview {
   publications_pending: number;
   publications_done: number;
 }
+
 
 interface Autopilot {
   enabled?: boolean;
@@ -69,6 +71,8 @@ function activityDetail(item: Activity): string {
 export default function OverviewPage() {
   const { client, role } = useStudio();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [funnel, setFunnel] = useState<Funnel | null>(null);
+  const [funnelMissing, setFunnelMissing] = useState(false);
   const [autopilot, setAutopilot] = useState<Autopilot>({});
   const [budget, setBudget] = useState<number | null>(null);
   const [spend, setSpend] = useState<number | null>(null);
@@ -80,16 +84,19 @@ export default function OverviewPage() {
 
   const load = useCallback(async () => {
     const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-    const [stats, settings, spent, picked, log, uploads] = await Promise.all([
+    const [stats, settings, spent, picked, log, uploads, funnelStats] = await Promise.all([
       client.from("pipeline_overview").select("*").maybeSingle(),
       client.from("app_settings").select("key, value").in("key", ["autopilot", "budget"]),
       client.rpc("provider_spend_usd"),
       client.from("audit_logs").select("id", { count: "exact", head: true }).eq("action", "candidate.auto_selected").gt("created_at", since),
       client.from("audit_logs").select("id, action, actor_type, data, created_at").order("created_at", { ascending: false }).limit(14),
       client.from("youtube_publications").select("queue_id, youtube_video_id, privacy, created_at").order("created_at", { ascending: false }).limit(6),
+      client.from("editorial_funnel_24h").select("*").maybeSingle(),
     ]);
     if (stats.error || settings.error || log.error || uploads.error) setMessage("Alcuni dati non sono leggibili.");
     setOverview((stats.data as Overview | null) ?? null);
+    setFunnel(funnelStats.error ? null : toFunnel(funnelStats.data as Record<string, unknown> | null));
+    setFunnelMissing(Boolean(funnelStats.error));
     const values = new Map((settings.data ?? []).map((row) => [row.key as string, row.value as Record<string, unknown>]));
     setAutopilot((values.get("autopilot") ?? {}) as Autopilot);
     const cap = values.get("budget")?.monthly_usd;
@@ -170,6 +177,8 @@ export default function OverviewPage() {
         <Stat label="Video caricati" value={overview?.publications_done ?? "–"} hint={overview?.publications_pending ? `${overview.publications_pending} in coda` : "nessuno in coda"} />
       </div>
 
+      <FunnelCard funnel={funnel} missing={funnelMissing} />
+
       <div className="grid two">
         <section className="card">
           <div className="card-head">
@@ -214,5 +223,49 @@ export default function OverviewPage() {
 
       <StatusLine message={message} />
     </>
+  );
+}
+
+function Since({ since }: { since: string | null }) {
+  const { complete } = coverage(since);
+  if (complete) return null;
+  return <span className="badge warn">{since ? `parziale: dati dal ${new Date(since).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "non disponibile"}</span>;
+}
+
+/** Where the news of the last 24 hours ended up, step by step. */
+function FunnelCard({ funnel, missing }: { funnel: Funnel | null; missing: boolean }) {
+  const value = (n: number | undefined) => (funnel ? n ?? 0 : "–");
+  const dropped = funnel ? funnel.dropped_undated + funnel.dropped_out_of_window + funnel.dropped_bad_url + funnel.dropped_duplicate : undefined;
+  return (
+    <section className="card" style={{ marginBottom: 16 }} aria-labelledby="funnel-title">
+      <div className="card-head">
+        <div>
+          <h2 id="funnel-title">Dove finiscono le notizie · ultime 24 ore</h2>
+          <p className="sub">Dalla raccolta dei feed al sito. I contatori segnati «parziale» esistono solo dalla migrazione del riepilogo pubblico.</p>
+        </div>
+        <Link href="/studio/riepilogo">Prepara il riepilogo</Link>
+      </div>
+      {missing && <p className="muted">Contatori non leggibili: la migrazione 20261108000600_public_digest non è applicata a questo database.</p>}
+      <h3 className="funnel-step">1. Raccolta <Since since={funnel?.drops_since ?? null} /></h3>
+      <div className="grid stats">
+        <Stat label="Voci lette dai feed" value={value(funnel?.feed_items)} hint={funnel ? `${funnel.ingest_runs} esecuzioni` : undefined} />
+        <Stat label="Scartate prima del DB" value={value(dropped)} hint={funnel ? `${funnel.dropped_undated} senza data · ${funnel.dropped_out_of_window} fuori finestra · ${funnel.dropped_bad_url} URL non validi · ${funnel.dropped_duplicate} doppioni` : undefined} />
+        <Stat label="Articoli nuovi salvati" value={value(funnel?.new_articles)} />
+      </div>
+      <h3 className="funnel-step">2. Eventi esclusi <Since since={funnel?.classified_since ?? null} /></h3>
+      <div className="grid stats">
+        <Stat label="Eventi nuovi" value={value(funnel?.events_seen)} />
+        <Stat label="Una sola fonte" value={value(funnel?.single_source)} hint="mai pubblicabili sul sito" />
+        <Stat label="Basso valore" value={value(funnel?.low_value)} />
+        <Stat label="Esclusi senza motivo registrato" value={value(funnel?.unclassified)} hint="salvati prima della migrazione" />
+      </div>
+      <h3 className="funnel-step">3. Candidati e controlli</h3>
+      <div className="grid stats">
+        <Stat label="Idonei non scelti" value={value(funnel?.eligible_unselected)} hint="da valutare per il sito" />
+        <Stat label="Script bloccati dal QC" value={value(funnel?.scripts_blocked)} hint="mai sul sito" />
+        <Stat label="Script trattenuti dal pilota" value={value(funnel?.scripts_held)} hint="rilievi in hold_checks" />
+        <Stat label="Schede pubblicate sul sito" value={value(funnel?.digest_published)} />
+      </div>
+    </section>
   );
 }

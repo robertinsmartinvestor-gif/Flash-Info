@@ -24,6 +24,8 @@ async function main(): Promise<void> {
   }
   const multi = report.ranked.filter((event) => event.independentSources > 1).length;
   console.log(`\nArticoli nuovi: ${report.newArticles}. Eventi: ${report.ranked.length}, ${multi} con più fonti. Candidati: ${report.candidates}.`);
+  const { run } = report;
+  console.log(`Scartati prima del DB: ${run.droppedUndated} senza data, ${run.droppedOutOfWindow} fuori finestra, ${run.droppedBadUrl} URL non validi, ${run.droppedDuplicate} doppioni. Già salvati: ${run.alreadyStored}.`);
   const failed = report.sources.filter((source) => source.status !== "ok" && source.status !== "not_modified").length;
   if (failed === report.sources.length) throw new Error("all_sources_failed");
 

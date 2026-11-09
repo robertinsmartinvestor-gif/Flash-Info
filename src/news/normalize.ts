@@ -98,23 +98,32 @@ export interface NormalizeOptions {
   maxAgeHours: number;
 }
 
+/** Why a feed item is discarded before it reaches the database. */
+export type DropReason = "undated" | "out_of_window" | "bad_url";
+
 /** Returns null for items that cannot be verified: invalid URL, no date, stale or future-dated. */
-export function normalizeItem(item: FeedItem, source: NewsSource, { now, maxAgeHours }: NormalizeOptions): Article | null {
+export function normalizeItem(item: FeedItem, source: NewsSource, options: NormalizeOptions): Article | null {
+  const result = classifyItem(item, source, options);
+  return "article" in result ? result.article : null;
+}
+
+/** Like normalizeItem, but says why an item is dropped, so the funnel can count it. */
+export function classifyItem(item: FeedItem, source: NewsSource, { now, maxAgeHours }: NormalizeOptions): { article: Article } | { drop: DropReason } {
   const published = parseFeedDate(item.publishedRaw);
-  if (!published) return null;
+  if (!published) return { drop: "undated" };
   const ageMs = now.getTime() - published.getTime();
-  if (ageMs > maxAgeHours * 60 * 60 * 1000 || ageMs < -MAX_FUTURE_MS) return null;
+  if (ageMs > maxAgeHours * 60 * 60 * 1000 || ageMs < -MAX_FUTURE_MS) return { drop: "out_of_window" };
 
   let canonicalUrl: string;
   try {
     canonicalUrl = canonicalizeUrl(item.url);
   } catch {
-    return null;
+    return { drop: "bad_url" };
   }
 
   const text = `${item.title}. ${item.summary}`;
   const { category, territory } = classify(item.title, item.summary, source.defaultCategory ?? null);
-  return {
+  return { article: {
     id: randomUUID(),
     sourceId: source.id,
     groupKey: source.groupKey,
@@ -132,7 +141,7 @@ export function normalizeItem(item: FeedItem, source: NewsSource, { now, maxAgeH
     contentHash: sha256(foldText(text)),
     category,
     territory: source.territory ?? territory,
-  };
+  } };
 }
 
 /** Removes exact repeats inside a batch: same URL, or same text from the same group. */
