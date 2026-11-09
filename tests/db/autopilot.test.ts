@@ -76,6 +76,24 @@ describe("autopilot_select_candidate", () => {
     await db.query("update app_settings set value = value || '{\"min_gap_hours\": 3, \"max_stories_per_day\": 3}' where key = 'autopilot'");
   });
 
+  it("counts the daily cap on the Rome calendar day, not the last 24 hours", async () => {
+    const startOfDay = "(date_trunc('day', now() at time zone 'Europe/Rome') at time zone 'Europe/Rome')";
+    const picks = async (at: string) => {
+      for (let i = 0; i < 3; i++) await db.query("select private.write_audit('candidate.auto_selected', 'editorial_candidate', $1)", [randomUUID()]);
+      await db.exec(`set session_replication_role = replica; update audit_logs set created_at = ${at} where action = 'candidate.auto_selected'; set session_replication_role = origin;`);
+    };
+    await candidate();
+    await picks(`${startOfDay} - interval '1 minute'`);
+    expect((await rpc("select autopilot_select_candidate() as id")).id).not.toBeNull();
+
+    await db.exec("set session_replication_role = replica; delete from audit_logs; set session_replication_role = origin;");
+    await candidate();
+    await picks(`${startOfDay}`);
+    await db.query("update app_settings set value = value || '{\"min_gap_hours\": 0}' where key = 'autopilot'");
+    expect((await rpc("select autopilot_select_candidate() as id")).id).toBeNull();
+    await db.query("update app_settings set value = value || '{\"min_gap_hours\": 3}' where key = 'autopilot'");
+  });
+
   it("refuses everything when switched off, and is closed to the Studio roles", async () => {
     await db.query("update app_settings set value = jsonb_set(value, '{enabled}', 'false') where key = 'autopilot'");
     await expect(rpc("select autopilot_select_candidate()")).rejects.toThrow("autopilot is disabled");
