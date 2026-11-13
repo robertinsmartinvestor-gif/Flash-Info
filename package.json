@@ -28,19 +28,19 @@
     "job:thumbnail": "tsx src/cli/set-thumbnail.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.6.0",
+    "@anthropic-ai/sdk": "^1.7.0",
     "@google/genai": "^2.32.0",
     "@supabase/supabase-js": "^2.119.0",
     "fast-xml-parser": "^5.12.0",
     "googleapis": "^189.0.0",
-    "next": "^16.4.5",
-    "openai": "^7.52.0",
+    "next": "^16.4.6",
+    "openai": "^7.54.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.15",
+    "@electric-sql/pglite": "^0.5.16",
     "@eslint/js": "^9.39.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
@@ -48,7 +48,7 @@
     "eslint": "^9.39.0",
     "tsx": "^4.23.15",
     "typescript": "~5.9.0",
-    "typescript-eslint": "^8.72.1",
+    "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   }
 }
