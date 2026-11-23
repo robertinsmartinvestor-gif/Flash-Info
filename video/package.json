@@ -13,13 +13,13 @@
     "@remotion/fonts": "4.0.541",
     "@remotion/media-parser": "4.0.541",
     "@remotion/renderer": "4.0.541",
-    "react": "19.2.0",
+    "react": "19.3.1",
     "react-dom": "19.2.0",
     "remotion": "4.0.541"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
-    "@types/react": "19.2.2",
+    "@types/react": "19.3.0",
     "typescript": "5.9.3"
   }
 }
